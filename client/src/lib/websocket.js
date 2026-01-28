@@ -39,7 +39,8 @@ function getWebSocketUrls() {
   // Primary: connect through Vite proxy
   const proxyUrl = `${protocol}//${window.location.host}/ws`;
   // Fallback: direct connection to server (dev mode only)
-  const directUrl = `ws://localhost:3001/ws`;
+  const serverPort = import.meta.env.VITE_SERVER_PORT || 3001;
+  const directUrl = `ws://localhost:${serverPort}/ws`;
   return { proxyUrl, directUrl };
 }
 
