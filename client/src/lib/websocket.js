@@ -10,6 +10,10 @@ export const state = writable({
 
 export const events = writable([]);
 
+// Alert stores
+export const alerts = writable([]);
+export const rules = writable([]);
+
 // Connection status store for UI display
 export const connectionStatus = writable({
   connected: false,
@@ -125,6 +129,12 @@ export function connectWebSocket(onStatusChange) {
             ...s,
             lastUpdateTime: now
           }));
+        } else if (msg.type === 'alert') {
+          alerts.update(a => [msg.alert, ...a].slice(0, 100));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
         }
       } catch (err) {
         console.error('Failed to parse message:', err);
@@ -184,4 +194,34 @@ export function disconnect() {
     lastUpdateTime: null,
     hasInitialData: false
   });
+}
+
+// Fetch alert rules from API
+export async function fetchRules() {
+  try {
+    const response = await fetch('/api/rules');
+    if (response.ok) {
+      const data = await response.json();
+      rules.set(data);
+      return data;
+    }
+  } catch (err) {
+    console.error('Failed to fetch rules:', err);
+  }
+  return [];
+}
+
+// Fetch alert history from API
+export async function fetchAlerts() {
+  try {
+    const response = await fetch('/api/alerts');
+    if (response.ok) {
+      const data = await response.json();
+      alerts.set(data);
+      return data;
+    }
+  } catch (err) {
+    console.error('Failed to fetch alerts:', err);
+  }
+  return [];
 }
