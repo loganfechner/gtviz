@@ -1,7 +1,9 @@
 <script>
   import CopyButton from './CopyButton.svelte';
+  import SkeletonRow from './SkeletonRow.svelte';
 
   export let hooks = {};
+  export let loading = false;
 
   $: hookEntries = Object.entries(hooks);
 
@@ -15,7 +17,11 @@
 <div class="hook-status">
   <h3>Hook Status</h3>
 
-  {#if hookEntries.length === 0}
+  {#if loading}
+    {#each Array(2) as _}
+      <SkeletonRow variant="bead" />
+    {/each}
+  {:else if hookEntries.length === 0}
     <p class="empty">No hooks active</p>
   {:else}
     {#each hookEntries as [agent, hook]}

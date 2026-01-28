@@ -1,6 +1,9 @@
 <script>
+  import SkeletonRow from './SkeletonRow.svelte';
+
   export let agent = null;
   export let history = [];
+  export let loading = false;
 
   function formatTime(timestamp) {
     if (!timestamp) return '';
@@ -41,7 +44,13 @@
     {/if}
   </div>
 
-  {#if history.length === 0}
+  {#if loading}
+    <div class="entries">
+      {#each Array(4) as _}
+        <SkeletonRow variant="default" />
+      {/each}
+    </div>
+  {:else if history.length === 0}
     <div class="empty">No history available</div>
   {:else}
     <div class="entries">

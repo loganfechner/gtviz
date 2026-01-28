@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 
 export const state = writable({
   rigs: {},
@@ -15,8 +15,22 @@ export const connectionStatus = writable({
   connected: false,
   reconnecting: false,
   attempt: 0,
-  url: null
+  url: null,
+  lastUpdateTime: null,
+  hasInitialData: false
 });
+
+// Stale data threshold (10 seconds without updates while connected)
+const STALE_THRESHOLD = 10000;
+
+// Derived store for stale data detection
+export const isStale = derived(
+  connectionStatus,
+  ($status) => {
+    if (!$status.connected || !$status.lastUpdateTime) return false;
+    return Date.now() - $status.lastUpdateTime > STALE_THRESHOLD;
+  }
+);
 
 let ws = null;
 let reconnectTimer = null;
@@ -79,11 +93,21 @@ export function connectWebSocket(onStatusChange) {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        const now = Date.now();
 
         if (msg.type === 'state') {
           state.set(msg.data);
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now,
+            hasInitialData: true
+          }));
         } else if (msg.type === 'event') {
           events.update(e => [msg.event, ...e].slice(0, 100));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
 
           // Also update mail in state if it's a mail event
           if (msg.event.type === 'mail') {
@@ -147,6 +171,8 @@ export function disconnect() {
     connected: false,
     reconnecting: false,
     attempt: 0,
-    url: null
+    url: null,
+    lastUpdateTime: null,
+    hasInitialData: false
   });
 }

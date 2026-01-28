@@ -1,7 +1,9 @@
 <script>
   import CopyButton from './CopyButton.svelte';
+  import SkeletonRow from './SkeletonRow.svelte';
 
   export let beads = [];
+  export let loading = false;
 
   function getStatusColor(status) {
     switch (status) {
@@ -16,7 +18,11 @@
 <div class="beads-list">
   <h3>Active Beads</h3>
 
-  {#if beads.length === 0}
+  {#if loading}
+    {#each Array(3) as _}
+      <SkeletonRow variant="bead" />
+    {/each}
+  {:else if beads.length === 0}
     <p class="empty">No beads found</p>
   {:else}
     {#each beads as bead}

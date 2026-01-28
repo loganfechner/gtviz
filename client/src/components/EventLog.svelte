@@ -1,8 +1,10 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import SkeletonRow from './SkeletonRow.svelte';
 
   export let events = [];
   export let rig = null;
+  export let loading = false;
 
   const dispatch = createEventDispatcher();
 
@@ -46,7 +48,13 @@
 <div class="event-log">
   <h3>Live Events</h3>
 
-  {#if filteredEvents.length === 0}
+  {#if loading}
+    <div class="events">
+      {#each Array(5) as _}
+        <SkeletonRow variant="event" />
+      {/each}
+    </div>
+  {:else if filteredEvents.length === 0}
     <p class="empty">Waiting for events...</p>
   {:else}
     <div class="events">
