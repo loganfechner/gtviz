@@ -70,6 +70,75 @@ app.get('/api/rigs', (req, res) => {
   res.json(state.getRigs());
 });
 
+// Export events as JSON or CSV
+app.get('/api/events/export', (req, res) => {
+  const { format = 'json', rig, type, search } = req.query;
+  const currentState = state.getState();
+
+  // Combine events and mail into a single list
+  let allEvents = [
+    ...currentState.events,
+    ...currentState.mail.map(m => ({ type: 'mail', ...m }))
+  ];
+
+  // Sort by timestamp (newest first)
+  allEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Apply filters
+  if (rig) {
+    allEvents = allEvents.filter(e => !e.source || e.source === rig);
+  }
+
+  if (type && type !== 'all') {
+    allEvents = allEvents.filter(e => e.type === type);
+  }
+
+  if (search) {
+    const searchLower = search.toLowerCase();
+    allEvents = allEvents.filter(e => {
+      const content = (e.content || '').toLowerCase();
+      const preview = (e.preview || '').toLowerCase();
+      const message = (e.message || '').toLowerCase();
+      const action = (e.action || '').toLowerCase();
+      const from = (e.from || '').toLowerCase();
+      const to = (e.to || '').toLowerCase();
+      const subject = (e.subject || '').toLowerCase();
+      return content.includes(searchLower) ||
+             preview.includes(searchLower) ||
+             message.includes(searchLower) ||
+             action.includes(searchLower) ||
+             from.includes(searchLower) ||
+             to.includes(searchLower) ||
+             subject.includes(searchLower);
+    });
+  }
+
+  if (format === 'csv') {
+    // Generate CSV
+    const headers = ['timestamp', 'type', 'source', 'from', 'to', 'subject', 'message', 'action', 'preview'];
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = allEvents.map(e => headers.map(h => escapeCSV(e[h])).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="events-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } else {
+    // JSON format
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="events-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.json(allEvents);
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 server.on('error', (err) => {

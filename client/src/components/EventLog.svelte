@@ -8,12 +8,45 @@
 
   const dispatch = createEventDispatcher();
 
-  $: filteredEvents = rig
+  let searchText = '';
+  let typeFilter = 'all';
+
+  $: rigFilteredEvents = rig
     ? events.filter(e => !e.source || e.source === rig)
     : events;
 
+  $: filteredEvents = rigFilteredEvents.filter(e => {
+    // Type filter
+    if (typeFilter !== 'all' && e.type !== typeFilter) return false;
+
+    // Search filter
+    if (searchText) {
+      const search = searchText.toLowerCase();
+      const matchesContent = (e.content || '').toLowerCase().includes(search);
+      const matchesPreview = (e.preview || '').toLowerCase().includes(search);
+      const matchesMessage = (e.message || '').toLowerCase().includes(search);
+      const matchesAction = (e.action || '').toLowerCase().includes(search);
+      const matchesFrom = (e.from || '').toLowerCase().includes(search);
+      const matchesTo = (e.to || '').toLowerCase().includes(search);
+      const matchesSubject = (e.subject || '').toLowerCase().includes(search);
+      if (!(matchesContent || matchesPreview || matchesMessage || matchesAction || matchesFrom || matchesTo || matchesSubject)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  function handleEventClick(event) {
+    dispatch('eventclick', event);
+  }
+
   function handleMailClick(event) {
     dispatch('mailclick', event);
+  }
+
+  function handleExport(format) {
+    const exportUrl = `/api/events/export?format=${format}&rig=${rig || ''}&type=${typeFilter}&search=${encodeURIComponent(searchText)}`;
+    window.open(exportUrl, '_blank');
   }
 
   function formatTime(timestamp) {
@@ -46,7 +79,33 @@
 </script>
 
 <div class="event-log">
-  <h3>Live Events</h3>
+  <div class="header">
+    <h3>Live Events</h3>
+    <div class="export-dropdown">
+      <button class="export-btn" title="Export events">
+        Export
+      </button>
+      <div class="dropdown-content">
+        <button on:click={() => handleExport('json')}>JSON</button>
+        <button on:click={() => handleExport('csv')}>CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input
+      type="text"
+      class="search-input"
+      placeholder="Search events..."
+      bind:value={searchText}
+    />
+    <select class="type-filter" bind:value={typeFilter}>
+      <option value="all">All Types</option>
+      <option value="mail">Mail</option>
+      <option value="gt_event">GT Event</option>
+      <option value="feed">Feed</option>
+    </select>
+  </div>
 
   {#if loading}
     <div class="events">
@@ -55,7 +114,13 @@
       {/each}
     </div>
   {:else if filteredEvents.length === 0}
-    <p class="empty">Waiting for events...</p>
+    <p class="empty">
+      {#if searchText || typeFilter !== 'all'}
+        No matching events
+      {:else}
+        Waiting for events...
+      {/if}
+    </p>
   {:else}
     <div class="events">
       {#each filteredEvents.slice(0, 50) as event}
@@ -69,7 +134,7 @@
               <span class="event-time">{formatTime(event.timestamp)}</span>
             </div>
             {#if event.type === 'mail'}
-              <button class="mail-link" on:click={() => handleMailClick(event)}>
+              <button class="event-link" on:click={() => handleEventClick(event)}>
                 <div class="event-detail">
                   {event.from} → {event.to}
                 </div>
@@ -77,10 +142,16 @@
                   <div class="event-preview">{event.preview}</div>
                 {/if}
               </button>
-            {:else if event.message}
-              <div class="event-detail">{event.message}</div>
-            {:else if event.action}
-              <div class="event-detail">{event.action}</div>
+            {:else}
+              <button class="event-link" on:click={() => handleEventClick(event)}>
+                {#if event.message}
+                  <div class="event-detail">{event.message}</div>
+                {:else if event.action}
+                  <div class="event-detail">{event.action}</div>
+                {:else}
+                  <div class="event-detail">View details</div>
+                {/if}
+              </button>
             {/if}
           </div>
         </div>
@@ -96,12 +167,113 @@
     flex-direction: column;
   }
 
-  .event-log h3 {
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .header h3 {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #8b949e;
+    margin: 0;
+  }
+
+  .export-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+
+  .export-btn {
+    padding: 4px 8px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #8b949e;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .export-btn:hover {
+    background: #30363d;
+    color: #c9d1d9;
+  }
+
+  .dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    z-index: 10;
+    min-width: 80px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .export-dropdown:hover .dropdown-content {
+    display: block;
+  }
+
+  .dropdown-content button {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    color: #c9d1d9;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .dropdown-content button:hover {
+    background: #30363d;
+  }
+
+  .filters {
+    display: flex;
+    gap: 8px;
     margin-bottom: 12px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    font-size: 12px;
+  }
+
+  .search-input::placeholder {
+    color: #6e7681;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+
+  .type-filter {
+    padding: 6px 8px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .type-filter:focus {
+    outline: none;
+    border-color: #58a6ff;
   }
 
   .empty {
@@ -177,7 +349,7 @@
     text-overflow: ellipsis;
   }
 
-  .mail-link {
+  .event-link {
     display: block;
     width: 100%;
     text-align: left;
@@ -189,11 +361,11 @@
     transition: background 0.15s;
   }
 
-  .mail-link:hover {
+  .event-link:hover {
     background: #21262d;
   }
 
-  .mail-link:hover .event-preview {
+  .event-link:hover .event-preview {
     background: #30363d;
   }
 </style>

@@ -30,6 +30,10 @@
   function handleMailClick(e) {
     dispatch('mailclick', e.detail);
   }
+
+  function handleEventClick(e) {
+    dispatch('eventclick', e.detail);
+  }
 </script>
 
 <aside class="sidebar">
@@ -56,7 +60,7 @@
 
   <div class="content">
     {#if activeTab === 'events'}
-      <EventLog {events} {rig} on:mailclick={handleMailClick} loading={!hasInitialData} />
+      <EventLog {events} {rig} on:mailclick={handleMailClick} on:eventclick={handleEventClick} loading={!hasInitialData} />
     {:else if activeTab === 'beads'}
       <BeadsList {beads} loading={!hasInitialData} />
     {:else if activeTab === 'hooks'}
