@@ -2,11 +2,14 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import DataTransferAnimation from './components/DataTransferAnimation.svelte';
 
   let hooks = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+  let animations = [];
+  let previousHooks = {};
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -44,14 +47,69 @@
     switch (message.type) {
       case 'initial':
         hooks = message.data.hooks || {};
+        previousHooks = { ...hooks };
         lastUpdated = message.timestamp;
         break;
 
       case 'hooks:updated':
+        detectAndTriggerAnimations(message.data.changes || []);
+        previousHooks = { ...hooks };
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
         break;
     }
+  }
+
+  function detectAndTriggerAnimations(changes) {
+    for (const change of changes) {
+      const prev = change.previous;
+      const curr = change.current;
+
+      if (curr.role === 'polecat' && curr.beadId && (!prev || !prev.beadId)) {
+        triggerMqSubmitAnimation(change.agent);
+      }
+
+      if (curr.role === 'refinery' && curr.beadId && (!prev || !prev.beadId)) {
+        const sourcePolecat = findPolecatThatJustCompleted(changes);
+        if (sourcePolecat) {
+          triggerPolecatToRefineryAnimation(sourcePolecat, change.agent);
+        } else {
+          triggerMqSubmitAnimation(change.agent);
+        }
+      }
+    }
+  }
+
+  function findPolecatThatJustCompleted(changes) {
+    for (const change of changes) {
+      const prev = change.previous;
+      const curr = change.current;
+
+      if (curr.role === 'polecat' && prev && prev.beadId && !curr.beadId) {
+        return change.agent;
+      }
+    }
+    return null;
+  }
+
+  function triggerMqSubmitAnimation(targetAgent) {
+    animations = [...animations, {
+      id: Date.now() + Math.random(),
+      type: 'mq-submit',
+      sourceSelector: null,
+      targetSelector: `[data-agent="${targetAgent}"]`,
+      processed: false
+    }];
+  }
+
+  function triggerPolecatToRefineryAnimation(sourceAgent, targetAgent) {
+    animations = [...animations, {
+      id: Date.now() + Math.random(),
+      type: 'polecat-to-refinery',
+      sourceSelector: `[data-agent="${sourceAgent}"]`,
+      targetSelector: `[data-agent="${targetAgent}"]`,
+      processed: false
+    }];
   }
 
   function requestPoll() {
@@ -95,14 +153,19 @@
   <div class="layout">
     <div class="main-area">
       <h2>Agents</h2>
-      <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
-        {/each}
+      <div class="agent-grid-container">
+        <div class="agent-grid">
+          {#each agentList as agent (agent.agent)}
+            <div data-agent={agent.agent}>
+              <AgentCard {agent} />
+            </div>
+          {/each}
 
-        {#if agentList.length === 0}
-          <p class="empty">No agents discovered yet...</p>
-        {/if}
+          {#if agentList.length === 0}
+            <p class="empty">No agents discovered yet...</p>
+          {/if}
+        </div>
+        <DataTransferAnimation {animations} />
       </div>
     </div>
 
@@ -206,6 +269,10 @@
     font-size: 1.25rem;
     margin-bottom: 1rem;
     color: #e94560;
+  }
+
+  .agent-grid-container {
+    position: relative;
   }
 
   .agent-grid {
