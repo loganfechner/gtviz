@@ -7,6 +7,7 @@
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
   import ErrorPanel from './ErrorPanel.svelte';
+  import BeadLifecycleWaterfall from './BeadLifecycleWaterfall.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -15,6 +16,7 @@
   export let rig = null;
   export let agents = [];
   export let agentHistory = {};
+  export let beadHistory = {};
   export let selectedAgent = null;
   export let metrics = {};
   export let hasInitialData = false;
@@ -56,6 +58,9 @@
     <button class:active={activeTab === 'timeline'} on:click={() => activeTab = 'timeline'}>
       Timeline
     </button>
+    <button class:active={activeTab === 'lifecycle'} on:click={() => activeTab = 'lifecycle'}>
+      Lifecycle
+    </button>
     <button class:active={activeTab === 'insights'} on:click={() => activeTab = 'insights'}>
       Insights
     </button>
@@ -81,6 +86,8 @@
       <HookStatus {hooks} loading={!hasInitialData} />
     {:else if activeTab === 'timeline'}
       <AgentTimeline agent={selectedAgent} history={currentAgentHistory} loading={!hasInitialData} />
+    {:else if activeTab === 'lifecycle'}
+      <BeadLifecycleWaterfall {beads} {beadHistory} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'insights'}
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}

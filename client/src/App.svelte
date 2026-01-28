@@ -176,6 +176,7 @@
       rig={selectedRig}
       agents={currentAgents}
       {agentHistory}
+      beadHistory={$state.beadHistory || {}}
       {selectedAgent}
       {metrics}
       {logs}
