@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentMonitor } from './agent-monitor.js';
+import logger from './logger.js';
 
 const execAsync = promisify(exec);
 
@@ -46,7 +47,7 @@ export class GtPoller {
   start() {
     this.poll();
     this.interval = setInterval(() => this.poll(), this.pollIntervalMs);
-    console.log('GT poller started');
+    logger.info('poller', 'GT poller started');
   }
 
   stop() {
@@ -65,7 +66,7 @@ export class GtPoller {
         this.pollHooks()
       ]);
     } catch (err) {
-      console.error('Poll error:', err.message);
+      logger.error('poller', 'Poll cycle failed', { error: err.message });
     }
   }
 
@@ -82,7 +83,7 @@ export class GtPoller {
     } catch (err) {
       this.failureCount.rigs = (this.failureCount.rigs || 0) + 1;
       if (this.failureCount.rigs <= 3) {
-        console.warn(`[gtviz] Rig poll failed (attempt ${this.failureCount.rigs}): ${err.message}`);
+        logger.warn('poller', 'Rig poll failed', { attempt: this.failureCount.rigs, error: err.message });
       }
       // Graceful degradation: keep last known state
     }
@@ -149,7 +150,7 @@ export class GtPoller {
         const key = `agents-${rig}`;
         this.failureCount[key] = (this.failureCount[key] || 0) + 1;
         if (this.failureCount[key] <= 3) {
-          console.warn(`[gtviz] Agent poll failed for ${rig}: ${e.message}`);
+          logger.warn('poller', 'Agent poll failed', { rig, error: e.message });
         }
         // Graceful degradation: keep last known agent state
       }
@@ -255,7 +256,7 @@ export class GtPoller {
         const key = `beads-${rig}`;
         this.failureCount[key] = (this.failureCount[key] || 0) + 1;
         if (this.failureCount[key] <= 3) {
-          console.warn(`[gtviz] Bead poll failed for ${rig}: ${e.message}`);
+          logger.warn('poller', 'Bead poll failed', { rig, error: e.message });
         }
         // Graceful degradation: keep last known bead state
       }
@@ -345,7 +346,7 @@ export class GtPoller {
         const key = `hooks-${rig}`;
         this.failureCount[key] = (this.failureCount[key] || 0) + 1;
         if (this.failureCount[key] <= 3) {
-          console.warn(`[gtviz] Hook poll failed for ${rig}: ${e.message}`);
+          logger.warn('poller', 'Hook poll failed', { rig, error: e.message });
         }
       }
     }
