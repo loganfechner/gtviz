@@ -5,10 +5,14 @@ export const state = writable({
   agents: {},
   beads: {},
   hooks: {},
-  mail: []
+  mail: [],
+  errors: []
 });
 
 export const events = writable([]);
+
+// Separate errors store for UI components that only care about errors
+export const errors = writable([]);
 
 // Connection status store for UI display
 export const connectionStatus = writable({
@@ -97,6 +101,10 @@ export function connectWebSocket(onStatusChange) {
 
         if (msg.type === 'state') {
           state.set(msg.data);
+          // Sync errors store with state
+          if (msg.data.errors) {
+            errors.set(msg.data.errors);
+          }
           connectionStatus.update(s => ({
             ...s,
             lastUpdateTime: now,
@@ -116,6 +124,25 @@ export function connectWebSocket(onStatusChange) {
               mail: [msg.event, ...(s.mail || [])].slice(0, 50)
             }));
           }
+          // Update errors in state if it's an error event
+          if (msg.event.type === 'error') {
+            state.update(s => ({
+              ...s,
+              errors: [msg.event, ...(s.errors || [])].slice(0, 50)
+            }));
+            errors.update(e => [msg.event, ...e].slice(0, 50));
+          }
+        } else if (msg.type === 'error') {
+          // Direct error message from server
+          errors.update(e => [msg.error, ...e].slice(0, 50));
+          state.update(s => ({
+            ...s,
+            errors: [msg.error, ...(s.errors || [])].slice(0, 50)
+          }));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
         } else if (msg.type === 'metrics') {
           state.update(s => ({
             ...s,

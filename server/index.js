@@ -26,9 +26,17 @@ state.on('update', (data) => {
   });
 });
 
-// Broadcast events (mail, logs) to all clients
+// Broadcast events (mail, logs, errors) to all clients
 state.on('event', (event) => {
   const message = JSON.stringify({ type: 'event', event });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+// Broadcast error events to all clients
+state.on('error', (error) => {
+  const message = JSON.stringify({ type: 'error', error });
   wss.clients.forEach(client => {
     if (client.readyState === 1) client.send(message);
   });

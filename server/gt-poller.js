@@ -96,6 +96,16 @@ export class GtPoller {
       if (this.failureCount.rigs <= 3) {
         logger.warn('poller', 'Rig poll failed', { attempt: this.failureCount.rigs, error: err.message });
       }
+      // Emit error event for UI visibility
+      this.state.addError({
+        component: 'poller',
+        operation: 'pollRigs',
+        severity: this.failureCount.rigs >= 3 ? 'error' : 'warning',
+        message: `Rig poll failed: ${err.message}`,
+        retryCount: this.failureCount.rigs,
+        maxRetries: RETRY_CONFIG.maxRetries,
+        lastSuccess: this.lastSuccessfulPoll.rigs || null
+      });
       // Graceful degradation: keep last known state
     }
   }
@@ -165,6 +175,16 @@ export class GtPoller {
         if (this.failureCount[key] <= 3) {
           logger.warn('poller', 'Agent poll failed', { rig, error: e.message });
         }
+        // Emit error event for UI visibility
+        this.state.addError({
+          component: 'poller',
+          operation: 'pollAgents',
+          rig,
+          severity: this.failureCount[key] >= 3 ? 'error' : 'warning',
+          message: `Agent poll failed for ${rig}: ${e.message}`,
+          retryCount: this.failureCount[key],
+          maxRetries: RETRY_CONFIG.maxRetries
+        });
         // Graceful degradation: keep last known agent state
       }
     }
@@ -286,6 +306,16 @@ export class GtPoller {
         if (this.failureCount[key] <= 3) {
           logger.warn('poller', 'Bead poll failed', { rig, error: e.message });
         }
+        // Emit error event for UI visibility
+        this.state.addError({
+          component: 'poller',
+          operation: 'pollBeads',
+          rig,
+          severity: this.failureCount[key] >= 3 ? 'error' : 'warning',
+          message: `Bead poll failed for ${rig}: ${e.message}`,
+          retryCount: this.failureCount[key],
+          maxRetries: RETRY_CONFIG.maxRetries
+        });
         // Graceful degradation: keep last known bead state
       }
     }
@@ -626,6 +656,16 @@ export class GtPoller {
         if (this.failureCount[key] <= 3) {
           logger.warn('poller', 'Hook poll failed', { rig, error: e.message });
         }
+        // Emit error event for UI visibility
+        this.state.addError({
+          component: 'poller',
+          operation: 'pollHooks',
+          rig,
+          severity: this.failureCount[key] >= 3 ? 'error' : 'warning',
+          message: `Hook poll failed for ${rig}: ${e.message}`,
+          retryCount: this.failureCount[key],
+          maxRetries: RETRY_CONFIG.maxRetries
+        });
       }
     }
   }

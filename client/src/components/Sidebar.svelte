@@ -6,10 +6,12 @@
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
+  import ErrorPanel from './ErrorPanel.svelte';
 
   export let beads = [];
   export let hooks = {};
   export let events = [];
+  export let errors = [];
   export let rig = null;
   export let agents = [];
   export let agentHistory = {};
@@ -18,6 +20,10 @@
   export let hasInitialData = false;
   export let logs = [];
   export let agentStats = {};
+
+  $: errorCount = errors.filter(e => e.severity === 'error').length;
+  $: warningCount = errors.filter(e => e.severity === 'warning').length;
+  $: hasActiveErrors = errorCount > 0 || warningCount > 0;
 
   const dispatch = createEventDispatcher();
 
@@ -56,6 +62,14 @@
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
+    <button class:active={activeTab === 'errors'} class:has-errors={hasActiveErrors} on:click={() => activeTab = 'errors'}>
+      Errors
+      {#if errorCount > 0}
+        <span class="error-badge">{errorCount}</span>
+      {:else if warningCount > 0}
+        <span class="warning-badge">{warningCount}</span>
+      {/if}
+    </button>
   </nav>
 
   <div class="content">
@@ -71,6 +85,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'errors'}
+      <ErrorPanel {errors} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
@@ -109,6 +125,37 @@
   .tabs button.active {
     color: #58a6ff;
     border-bottom-color: #58a6ff;
+  }
+
+  .tabs button.has-errors {
+    color: #f85149;
+  }
+
+  .tabs button.has-errors.active {
+    border-bottom-color: #f85149;
+  }
+
+  .error-badge, .warning-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+
+  .error-badge {
+    background: #f85149;
+    color: white;
+  }
+
+  .warning-badge {
+    background: #f0883e;
+    color: white;
   }
 
   .content {

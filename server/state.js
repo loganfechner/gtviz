@@ -10,6 +10,7 @@ export class StateManager extends EventEmitter {
       hooks: {},
       mail: [],
       events: [],
+      errors: [],        // Backend errors (poll failures, file watcher errors)
       agentHistory: {},  // Track status changes per agent
       metrics: {},       // System metrics
       beadHistory: {},   // Track status changes per bead
@@ -139,6 +140,31 @@ export class StateManager extends EventEmitter {
       this.state.logs = this.state.logs.slice(0, 500);
     }
     this.emit('event', { type: 'log', ...log });
+  }
+
+  addError(error) {
+    const errorEvent = {
+      id: `err-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      ...error
+    };
+    this.state.errors.unshift(errorEvent);
+    // Keep only last 50 errors
+    if (this.state.errors.length > 50) {
+      this.state.errors = this.state.errors.slice(0, 50);
+    }
+    this.emit('error', errorEvent);
+    // Also emit as event so it shows in the event log
+    this.emit('event', { type: 'error', ...errorEvent });
+  }
+
+  clearError(errorId) {
+    this.state.errors = this.state.errors.filter(e => e.id !== errorId);
+    this.emit('update', this.state);
+  }
+
+  getErrors() {
+    return this.state.errors;
   }
 
   updateAgentStats(agentKey, stats) {

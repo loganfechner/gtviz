@@ -7,7 +7,7 @@
   import MailModal from './components/MailModal.svelte';
   import EventDetailModal from './components/EventDetailModal.svelte';
   import Spinner from './components/Spinner.svelte';
-  import { connectWebSocket, state, events, connectionStatus, isStale } from './lib/websocket.js';
+  import { connectWebSocket, state, events, errors, connectionStatus, isStale } from './lib/websocket.js';
 
   let selectedRig = null;
   let selectedMail = null;
@@ -72,6 +72,9 @@
       ? `Reconnecting (${$connectionStatus.attempt})...`
       : 'Connecting...';
 
+  $: errorCount = $errors.filter(e => e.severity === 'error').length;
+  $: warningCount = $errors.filter(e => e.severity === 'warning').length;
+
   let selectedAgent = null;
   let filters = { search: '', status: 'all', role: 'all' };
 
@@ -131,6 +134,16 @@
         </button>
       {/each}
     </div>
+    {#if errorCount > 0 || warningCount > 0}
+      <div class="error-indicator" class:has-errors={errorCount > 0}>
+        {#if errorCount > 0}
+          <span class="error-count">{errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+        {/if}
+        {#if warningCount > 0}
+          <span class="warning-count">{warningCount} warning{warningCount !== 1 ? 's' : ''}</span>
+        {/if}
+      </div>
+    {/if}
     <div class="status" class:connected class:stale={$isStale} class:reconnecting>
       {#if reconnecting || !connected}
         <Spinner size={12} />
@@ -159,6 +172,7 @@
       beads={currentBeads}
       hooks={currentHooks}
       events={$events}
+      errors={$errors}
       rig={selectedRig}
       agents={currentAgents}
       {agentHistory}
@@ -234,8 +248,33 @@
     color: white;
   }
 
-  .status {
+  .error-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-left: auto;
+    padding: 4px 10px;
+    background: #f0883e33;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .error-indicator.has-errors {
+    background: #f8514933;
+  }
+
+  .error-indicator .error-count {
+    color: #f85149;
+    font-weight: 500;
+  }
+
+  .error-indicator .warning-count {
+    color: #f0883e;
+    font-weight: 500;
+  }
+
+  .status {
+    margin-left: 12px;
     padding: 4px 10px;
     background: #f8514966;
     border-radius: 12px;
@@ -244,6 +283,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .error-indicator + .status {
+    margin-left: 12px;
   }
 
   .status.connected {
