@@ -1,0 +1,30 @@
+{
+  "name": "gtviz",
+  "version": "0.1.0",
+  "description": "Gas Town Agent Status Visualization",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "gtviz": "src/index.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./status-detector": "./src/status-detector.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "watch": "node src/index.js watch",
+    "serve": "node src/index.js serve",
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "gas-town",
+    "agent",
+    "status",
+    "visualization"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
