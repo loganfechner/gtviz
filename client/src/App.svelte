@@ -7,7 +7,7 @@
   import MailModal from './components/MailModal.svelte';
   import EventDetailModal from './components/EventDetailModal.svelte';
   import Spinner from './components/Spinner.svelte';
-  import { connectWebSocket, state, events, errors, connectionStatus, isStale } from './lib/websocket.js';
+  import { connectWebSocket, state, events, errors, errorPatterns, connectionStatus, isStale } from './lib/websocket.js';
 
   let selectedRig = null;
   let selectedMail = null;
@@ -175,6 +175,7 @@
       events={$events}
       errors={$errors}
       mail={$state.mail || []}
+      errorPatterns={$errorPatterns}
       rig={selectedRig}
       agents={currentAgents}
       {agentHistory}

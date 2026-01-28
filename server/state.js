@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { ErrorPatternAnalyzer } from './error-patterns.js';
 
 const GT_DIR = process.env.GT_DIR || join(homedir(), 'gt');
 const STATE_DIR = join(GT_DIR, '.gtviz');
@@ -45,12 +46,27 @@ export class StateManager extends EventEmitter {
       beadHistory: {},   // Track status changes per bead
       logs: [],          // Log entries from town.log, daemon.log
       agentStats: {},    // Performance stats per agent: completions, durations
-      alerts: []         // Active alerts from anomaly detector
+      alerts: [],        // Active alerts from anomaly detector
+      errorPatterns: {   // Error pattern analysis
+        patterns: [],
+        summary: {
+          totalPatterns: 0,
+          totalErrors: 0,
+          systemicCount: 0,
+          isolatedCount: 0,
+          errorCount: 0,
+          warnCount: 0,
+          affectedAgentsCount: 0,
+          topPatterns: []
+        }
+      }
     };
     /** @type {Object<string, string>} */
     this.previousStatus = {};
     /** @type {Object<string, string>} */
     this.previousBeadStatus = {};
+    /** @type {ErrorPatternAnalyzer} */
+    this.errorPatternAnalyzer = new ErrorPatternAnalyzer();
   }
 
   /**
@@ -272,6 +288,24 @@ export class StateManager extends EventEmitter {
       this.state.logs = this.state.logs.slice(0, 500);
     }
     this.emit('event', { type: 'log', ...log });
+
+    // Update error pattern analysis for error/warn logs
+    if (log.level === 'error' || log.level === 'warn') {
+      this.errorPatternAnalyzer.addLog(log);
+      this.updateErrorPatterns();
+    }
+  }
+
+  updateErrorPatterns() {
+    this.state.errorPatterns = {
+      patterns: this.errorPatternAnalyzer.getPatterns(),
+      summary: this.errorPatternAnalyzer.getSummary()
+    };
+    this.emit('errorPatterns', this.state.errorPatterns);
+  }
+
+  getErrorPatterns() {
+    return this.state.errorPatterns;
   }
 
   /**

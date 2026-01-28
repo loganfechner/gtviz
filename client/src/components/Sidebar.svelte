@@ -14,12 +14,14 @@
   import AgentComparisonDashboard from './AgentComparisonDashboard.svelte';
   import CommunicationHeatmap from './CommunicationHeatmap.svelte';
   import AlertingPanel from './AlertingPanel.svelte';
+  import ErrorPatternsPanel from './ErrorPatternsPanel.svelte';
 
   export let beads = [];
   export let hooks = {};
   export let events = [];
   export let errors = [];
   export let mail = [];
+  export let errorPatterns = { patterns: [], summary: {} };
   export let rig = null;
   export let agents = [];
   export let agentHistory = {};
@@ -34,6 +36,8 @@
   $: errorCount = errors.filter(e => e.severity === 'error').length;
   $: warningCount = errors.filter(e => e.severity === 'warning').length;
   $: hasActiveErrors = errorCount > 0 || warningCount > 0;
+  $: systemicPatternCount = errorPatterns.summary?.systemicCount || 0;
+  $: totalPatternCount = errorPatterns.summary?.totalPatterns || 0;
 
   const dispatch = createEventDispatcher();
 
@@ -80,6 +84,14 @@
     </button>
     <button class:active={activeTab === 'health'} on:click={() => activeTab = 'health'}>
       Health
+    </button>
+    <button class:active={activeTab === 'patterns'} class:has-systemic={systemicPatternCount > 0} on:click={() => activeTab = 'patterns'}>
+      Patterns
+      {#if systemicPatternCount > 0}
+        <span class="systemic-badge">{systemicPatternCount}</span>
+      {:else if totalPatternCount > 0}
+        <span class="pattern-badge">{totalPatternCount}</span>
+      {/if}
     </button>
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
@@ -128,6 +140,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'health'}
       <HealthScoreDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'patterns'}
+      <ErrorPatternsPanel {errorPatterns} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
     {:else if activeTab === 'heatmap'}
@@ -196,7 +210,15 @@
     color: #f85149;
   }
 
-  .error-badge, .warning-badge {
+  .tabs button.has-systemic {
+    color: #f85149;
+  }
+
+  .tabs button.has-systemic.active {
+    border-bottom-color: #f85149;
+  }
+
+  .error-badge, .warning-badge, .systemic-badge, .pattern-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -236,6 +258,16 @@
 
   .tabs button .badge.critical {
     background: #f85149;
+  }
+
+  .systemic-badge {
+    background: #f85149;
+    color: white;
+  }
+
+  .pattern-badge {
+    background: #6e7681;
+    color: white;
   }
 
   .content {
