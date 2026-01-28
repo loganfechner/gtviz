@@ -61,7 +61,8 @@ export class GtPoller {
       await Promise.all([
         this.pollRigs(),
         this.pollAgents(),
-        this.pollBeads()
+        this.pollBeads(),
+        this.pollHooks()
       ]);
     } catch (err) {
       console.error('Poll error:', err.message);
@@ -283,5 +284,104 @@ export class GtPoller {
       }
     }
     return beads;
+  }
+
+  async pollHooks() {
+    const rigs = this.state.getRigs();
+    const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
+
+    for (const rig of rigs) {
+      try {
+        const hooks = await withRetry(async () => {
+          const rigHooks = {};
+          const agents = ['mayor', 'witness', 'refinery'];
+
+          for (const agent of agents) {
+            try {
+              const { stdout } = await execAsync(
+                `gt hook --json 2>/dev/null || gt hook`,
+                {
+                  cwd: `${gtDir}/${rig}/${agent}`,
+                  timeout: 5000,
+                  env: { ...process.env, GT_ROLE: agent }
+                }
+              );
+              const hookData = this.parseHookOutput(stdout, agent);
+              if (hookData) {
+                rigHooks[agent] = hookData;
+              }
+            } catch {}
+          }
+
+          // Also check polecats
+          try {
+            const { stdout: polecatList } = await execAsync(
+              `ls ${gtDir}/${rig}/polecats 2>/dev/null || echo ""`
+            );
+            const polecats = polecatList.split('\n').filter(p => p.trim());
+            for (const polecat of polecats) {
+              try {
+                const { stdout } = await execAsync(
+                  `gt hook --json 2>/dev/null || gt hook`,
+                  {
+                    cwd: `${gtDir}/${rig}/polecats/${polecat}`,
+                    timeout: 5000
+                  }
+                );
+                const hookData = this.parseHookOutput(stdout, polecat);
+                if (hookData) {
+                  rigHooks[`polecat/${polecat}`] = hookData;
+                }
+              } catch {}
+            }
+          } catch {}
+
+          return rigHooks;
+        }, `pollHooks(${rig})`);
+
+        this.state.updateHooks(rig, hooks);
+        this.failureCount[`hooks-${rig}`] = 0;
+      } catch (e) {
+        const key = `hooks-${rig}`;
+        this.failureCount[key] = (this.failureCount[key] || 0) + 1;
+        if (this.failureCount[key] <= 3) {
+          console.warn(`[gtviz] Hook poll failed for ${rig}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  parseHookOutput(output, agent) {
+    // Try JSON first
+    try {
+      const data = JSON.parse(output);
+      if (data.bead || data.hooked) {
+        return {
+          agent,
+          bead: data.bead || data.hooked,
+          title: data.title || '',
+          molecule: data.molecule || null,
+          autonomousMode: data.autonomousMode || false,
+          attachedAt: data.attachedAt || null
+        };
+      }
+      return null;
+    } catch {}
+
+    // Parse text output
+    // Look for "Hooked: <bead-id>: <title>" pattern
+    const hookedMatch = output.match(/Hooked:\s*(\S+)(?::\s*(.*))?/);
+    if (hookedMatch) {
+      return {
+        agent,
+        bead: hookedMatch[1],
+        title: hookedMatch[2] || '',
+        molecule: null,
+        autonomousMode: output.includes('AUTONOMOUS MODE'),
+        attachedAt: null
+      };
+    }
+
+    return null;
   }
 }
