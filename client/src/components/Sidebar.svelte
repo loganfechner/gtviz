@@ -13,6 +13,7 @@
   export let agentHistory = {};
   export let selectedAgent = null;
   export let metrics = {};
+  export let hasInitialData = false;
 
   let activeTab = 'events';
 
@@ -42,15 +43,15 @@
 
   <div class="content">
     {#if activeTab === 'events'}
-      <EventLog {events} {rig} />
+      <EventLog {events} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'beads'}
-      <BeadsList {beads} />
+      <BeadsList {beads} loading={!hasInitialData} />
     {:else if activeTab === 'hooks'}
-      <HookStatus {hooks} />
+      <HookStatus {hooks} loading={!hasInitialData} />
     {:else if activeTab === 'timeline'}
-      <AgentTimeline agent={selectedAgent} history={currentAgentHistory} />
+      <AgentTimeline agent={selectedAgent} history={currentAgentHistory} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
-      <MetricsDashboard {metrics} />
+      <MetricsDashboard {metrics} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>

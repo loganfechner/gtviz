@@ -3,7 +3,8 @@
   import NetworkGraph from './components/NetworkGraph.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import FilterBar from './components/FilterBar.svelte';
-  import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
+  import Spinner from './components/Spinner.svelte';
+  import { connectWebSocket, state, events, connectionStatus, isStale } from './lib/websocket.js';
 
   let selectedRig = null;
 
@@ -58,9 +59,11 @@
   });
 
   $: connected = $connectionStatus.connected;
+  $: hasInitialData = $connectionStatus.hasInitialData;
+  $: reconnecting = $connectionStatus.reconnecting;
   $: statusText = connected
-    ? 'Live'
-    : $connectionStatus.reconnecting
+    ? ($isStale ? 'Stale' : 'Live')
+    : reconnecting
       ? `Reconnecting (${$connectionStatus.attempt})...`
       : 'Connecting...';
 
@@ -105,7 +108,10 @@
         </button>
       {/each}
     </div>
-    <div class="status" class:connected>
+    <div class="status" class:connected class:stale={$isStale} class:reconnecting>
+      {#if reconnecting || !connected}
+        <Spinner size={12} />
+      {/if}
       {statusText}
     </div>
   </header>
@@ -135,6 +141,7 @@
       {agentHistory}
       {selectedAgent}
       {metrics}
+      {hasInitialData}
     />
   </main>
 </div>
@@ -196,11 +203,24 @@
     border-radius: 12px;
     font-size: 12px;
     color: #f85149;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .status.connected {
     background: #23863666;
     color: #3fb950;
+  }
+
+  .status.stale {
+    background: #f0883e44;
+    color: #f0883e;
+  }
+
+  .status.reconnecting {
+    background: #58a6ff33;
+    color: #58a6ff;
   }
 
   main {
