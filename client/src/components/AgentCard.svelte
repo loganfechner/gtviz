@@ -3,6 +3,7 @@
 
   export let agent;
   export let color = '#8b949e';
+  export let viewers = []; // Array of users viewing this agent
 
   function getStatusEmoji(status) {
     switch (status) {
@@ -39,6 +40,15 @@
   {/if}
   {#if agent.lastOutput}
     <div class="output">{agent.lastOutput.slice(0, 50)}...</div>
+  {/if}
+  {#if viewers.length > 0}
+    <div class="viewers">
+      {#each viewers as viewer (viewer.id)}
+        <span class="viewer-badge" style="--viewer-color: {viewer.color}" title="{viewer.username}">
+          {viewer.username.slice(0, 1).toUpperCase()}
+        </span>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -136,5 +146,27 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .viewers {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+
+  .viewer-badge {
+    width: 20px;
+    height: 20px;
+    background: var(--viewer-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    cursor: default;
   }
 </style>

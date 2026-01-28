@@ -15,6 +15,7 @@ import { AlertingEngine } from './alerting-engine.js';
 import { RulesStore } from './rules-store.js';
 import { createLoadForecaster } from './load-forecaster.js';
 import { createTaskReplayManager } from './task-replay.js';
+import { SessionManager } from './session-manager.js';
 import logger from './logger.js';
 import { METRICS_HISTORY_SIZE, METRICS_BROADCAST_MS } from './constants.js';
 
@@ -43,10 +44,25 @@ const loadForecaster = createLoadForecaster({
   historyWindowMs: 3600000    // Use 1 hour of history
 });
 const taskReplayManager = createTaskReplayManager(state);
+const sessionManager = new SessionManager();
 
 // Track intervals for cleanup
 let metricsInterval = null;
 let isShuttingDown = false;
+
+/**
+ * Broadcast a message to all connected WebSocket clients
+ * @param {object} message - Message object to stringify and send
+ * @param {WebSocket} [excludeWs] - Optional WebSocket to exclude from broadcast
+ */
+function broadcast(message, excludeWs = null) {
+  const data = JSON.stringify(message);
+  wss.clients.forEach(client => {
+    if (client.readyState === 1 && client !== excludeWs) {
+      client.send(data);
+    }
+  });
+}
 
 /**
  * Graceful shutdown handler
@@ -167,6 +183,50 @@ loadForecaster.on('update', (predictions) => {
   });
 });
 
+// Session manager events for real-time collaboration
+sessionManager.on('userJoined', (session) => {
+  logger.info('presence', 'User joined', { sessionId: session.id, username: session.username });
+  broadcast({
+    type: 'userJoined',
+    user: {
+      id: session.id,
+      username: session.username,
+      color: session.color,
+      currentView: session.currentView,
+      connectedAt: session.connectedAt
+    }
+  });
+});
+
+sessionManager.on('userLeft', (session) => {
+  logger.info('presence', 'User left', { sessionId: session.id, username: session.username });
+  broadcast({
+    type: 'userLeft',
+    userId: session.id
+  });
+});
+
+sessionManager.on('viewChanged', (session) => {
+  broadcast({
+    type: 'userActivity',
+    userId: session.id,
+    currentView: session.currentView,
+    lastActivity: session.lastActivity
+  });
+});
+
+sessionManager.on('usernameChanged', (session) => {
+  broadcast({
+    type: 'userUpdated',
+    user: {
+      id: session.id,
+      username: session.username,
+      color: session.color,
+      currentView: session.currentView
+    }
+  });
+});
+
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
   const message = JSON.stringify({ type: 'state', data });
@@ -243,20 +303,48 @@ taskReplayManager.on('taskCompleted', (job, task) => {
   });
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   logger.info('websocket', 'Client connected');
   metrics.recordWsConnection();
+
+  // Parse username from query string if provided
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const username = url.searchParams.get('username');
+
+  // Create session for this connection
+  const session = sessionManager.createSession(ws, username);
 
   // Send current state on connect
   ws.send(JSON.stringify({ type: 'state', data: state.getState() }));
 
-  ws.on('message', () => {
+  // Send presence info: their session ID and all online users
+  ws.send(JSON.stringify({
+    type: 'presence',
+    sessionId: session.id,
+    users: sessionManager.getPresenceSummary().users
+  }));
+
+  ws.on('message', (data) => {
     metrics.recordWsMessage();
+
+    try {
+      const msg = JSON.parse(data.toString());
+
+      // Handle presence-related messages from client
+      if (msg.type === 'updateView') {
+        sessionManager.updateView(ws, msg.view);
+      } else if (msg.type === 'setUsername') {
+        sessionManager.setUsername(ws, msg.username);
+      }
+    } catch (err) {
+      // Not all messages are JSON (e.g., heartbeats)
+    }
   });
 
   ws.on('close', () => {
     logger.info('websocket', 'Client disconnected');
     metrics.recordWsDisconnection();
+    sessionManager.removeSession(ws);
   });
 });
 
@@ -726,6 +814,11 @@ app.get('/api/predictions/spikes', (req, res) => {
 app.post('/api/predictions/refresh', (req, res) => {
   loadForecaster.update();
   res.json({ status: 'ok', message: 'Forecast refresh triggered' });
+});
+
+// Presence API for real-time collaboration
+app.get('/api/presence', (req, res) => {
+  res.json(sessionManager.getPresenceSummary());
 });
 
 // Serve static files in production

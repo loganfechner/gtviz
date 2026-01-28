@@ -2,12 +2,20 @@
   import { onMount, onDestroy, afterUpdate, createEventDispatcher } from 'svelte';
   import * as d3 from 'd3';
   import AgentCard from './AgentCard.svelte';
+  import { presence } from '../lib/websocket.js';
 
   const dispatch = createEventDispatcher();
 
   export let agents = [];
   export let mail = [];
   export let rig = null;
+
+  // Get viewers for a specific agent
+  function getAgentViewers(agentName) {
+    return $presence.users.filter(u =>
+      u.currentView?.rig === rig && u.currentView?.agent === agentName
+    );
+  }
 
   let container;
   let svgElement;
@@ -467,7 +475,7 @@
         role="button"
         tabindex="0"
       >
-        <AgentCard agent={node} color={getRoleColor(node.role)} />
+        <AgentCard agent={node} color={getRoleColor(node.role)} viewers={getAgentViewers(node.name)} />
       </div>
     {/each}
   </div>

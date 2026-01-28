@@ -31,6 +31,12 @@ export const rules = writable([]);
 // Separate error patterns store for the ErrorPatternsPanel
 export const errorPatterns = writable({ patterns: [], summary: {} });
 
+// Presence store for real-time collaboration
+export const presence = writable({
+  sessionId: null,
+  users: []
+});
+
 // Connection status store for UI display
 export const connectionStatus = writable({
   connected: false,
@@ -207,6 +213,42 @@ export function connectWebSocket(onStatusChange) {
             ...s,
             alerts: (s.alerts || []).filter(alert => alert.id !== msg.alertId)
           }));
+        } else if (msg.type === 'presence') {
+          // Initial presence data on connect
+          presence.set({
+            sessionId: msg.sessionId,
+            users: msg.users
+          });
+        } else if (msg.type === 'userJoined') {
+          // New user connected
+          presence.update(p => ({
+            ...p,
+            users: [...p.users, msg.user]
+          }));
+        } else if (msg.type === 'userLeft') {
+          // User disconnected
+          presence.update(p => ({
+            ...p,
+            users: p.users.filter(u => u.id !== msg.userId)
+          }));
+        } else if (msg.type === 'userActivity') {
+          // User changed what they're viewing
+          presence.update(p => ({
+            ...p,
+            users: p.users.map(u =>
+              u.id === msg.userId
+                ? { ...u, currentView: msg.currentView, lastActivity: msg.lastActivity }
+                : u
+            )
+          }));
+        } else if (msg.type === 'userUpdated') {
+          // User updated their info (e.g., username)
+          presence.update(p => ({
+            ...p,
+            users: p.users.map(u =>
+              u.id === msg.user.id ? { ...u, ...msg.user } : u
+            )
+          }));
         }
       } catch (err) {
         console.error('Failed to parse message:', err);
@@ -296,4 +338,30 @@ export async function fetchAlerts() {
     console.error('Failed to fetch alerts:', err);
   }
   return [];
+}
+
+/**
+ * Send a message to the server via WebSocket
+ * @param {object} message
+ */
+function sendMessage(message) {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify(message));
+  }
+}
+
+/**
+ * Update what the current user is viewing
+ * @param {object} view - { rig, agent, tab }
+ */
+export function updateUserView(view) {
+  sendMessage({ type: 'updateView', view });
+}
+
+/**
+ * Set the current user's display name
+ * @param {string} username
+ */
+export function setUsername(username) {
+  sendMessage({ type: 'setUsername', username });
 }
