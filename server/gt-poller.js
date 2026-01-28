@@ -2,6 +2,15 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentMonitor } from './agent-monitor.js';
 import logger from './logger.js';
+import {
+  parseStatusFromSymbol,
+  normalizePriority,
+  parseBeadHeader,
+  parseHookOutput,
+  toPollerHookFormat,
+  parseMetadataField,
+  parseDependency
+} from './parser-utils.js';
 
 const execAsync = promisify(exec);
 
@@ -352,7 +361,7 @@ export class GtPoller {
           id: bead.id,
           title: bead.title || '',
           status: bead.status || 'open',
-          priority: this.normalizePriority(bead.priority),
+          priority: normalizePriority(bead.priority),
           labels: bead.labels || [],
           owner: bead.owner || null,
           assignee: bead.assignee || null,
@@ -375,35 +384,16 @@ export class GtPoller {
     const beads = [];
     const lines = output.split('\n').filter(l => l.trim());
     for (const line of lines) {
-      // Parse: status-symbol id · title [● priority · STATUS]
-      // Example: ? gt-abc123 · Add feature [● P2 · HOOKED]
-      const fullMatch = line.match(/^([?○●✓✗])\s+(\S+)\s*·?\s*(.+?)(?:\s+\[([^\]]+)\])?$/);
-      if (fullMatch) {
-        const [, symbol, id, title, meta] = fullMatch;
-        const bead = {
-          id,
-          title: title.trim(),
-          status: this.parseStatusFromSymbol(symbol),
-          priority: null,
+      // Use shared parser for bead header
+      const parsed = parseBeadHeader(line);
+      if (parsed) {
+        beads.push({
+          id: parsed.id,
+          title: parsed.title,
+          status: parsed.status,
+          priority: parsed.priority,
           labels: []
-        };
-
-        if (meta) {
-          // Parse metadata like "● P2 · HOOKED" or "● critical · OPEN"
-          const priorityMatch = meta.match(/P([1-4])|critical|high|normal|low/i);
-          if (priorityMatch) {
-            const p = priorityMatch[0].toLowerCase();
-            if (p === 'p1' || p === 'critical') bead.priority = 'critical';
-            else if (p === 'p2' || p === 'high') bead.priority = 'high';
-            else if (p === 'p3' || p === 'normal') bead.priority = 'normal';
-            else if (p === 'p4' || p === 'low') bead.priority = 'low';
-          }
-          const statusMatch = meta.match(/HOOKED|OPEN|IN_PROGRESS|CLOSED|DONE/i);
-          if (statusMatch) {
-            bead.status = statusMatch[0].toLowerCase().replace('_', '_');
-          }
-        }
-        beads.push(bead);
+        });
         continue;
       }
 
@@ -420,17 +410,6 @@ export class GtPoller {
       }
     }
     return beads;
-  }
-
-  parseStatusFromSymbol(symbol) {
-    switch (symbol) {
-      case '?': return 'open';
-      case '○': return 'open';
-      case '●': return 'hooked';
-      case '✓': return 'done';
-      case '✗': return 'closed';
-      default: return 'open';
-    }
   }
 
   async fetchBeadDetails(beadId, cwd) {
@@ -454,7 +433,7 @@ export class GtPoller {
         title: data.title || '',
         description: data.description || '',
         status: data.status || 'open',
-        priority: this.normalizePriority(data.priority),
+        priority: normalizePriority(data.priority),
         labels: data.labels || [],
         owner: data.owner || null,
         assignee: data.assignee || null,
@@ -490,40 +469,22 @@ export class GtPoller {
     let descriptionLines = [];
 
     for (const line of lines) {
-      // Parse header line: ? bead-id · Title [● P2 · STATUS]
-      const headerMatch = line.match(/^[?○●✓✗]\s+(\S+)\s*·\s*(.+?)(?:\s+\[([^\]]+)\])?$/);
-      if (headerMatch) {
-        details.id = headerMatch[1];
-        details.title = headerMatch[2].trim();
-        if (headerMatch[3]) {
-          const meta = headerMatch[3];
-          const priorityMatch = meta.match(/P([1-4])|critical|high|normal|low/i);
-          if (priorityMatch) {
-            details.priority = this.normalizePriority(priorityMatch[0]);
-          }
-          const statusMatch = meta.match(/HOOKED|OPEN|IN_PROGRESS|CLOSED|DONE/i);
-          if (statusMatch) {
-            details.status = statusMatch[0].toLowerCase();
-          }
-        }
+      // Parse header line using shared parser
+      const header = parseBeadHeader(line);
+      if (header) {
+        details.id = header.id;
+        details.title = header.title;
+        details.status = header.status;
+        details.priority = header.priority;
         continue;
       }
 
-      // Parse metadata fields
-      const ownerMatch = line.match(/^Owner:\s*(.+)/);
-      if (ownerMatch) { details.owner = ownerMatch[1].trim(); continue; }
-
-      const assigneeMatch = line.match(/^Assignee:\s*(.+)/);
-      if (assigneeMatch) { details.assignee = assigneeMatch[1].trim(); continue; }
-
-      const typeMatch = line.match(/^Type:\s*(.+)/);
-      if (typeMatch) { details.type = typeMatch[1].trim(); continue; }
-
-      const createdMatch = line.match(/^Created:\s*(.+)/);
-      if (createdMatch) { details.createdAt = createdMatch[1].trim(); continue; }
-
-      const updatedMatch = line.match(/^Updated:\s*(.+)/);
-      if (updatedMatch) { details.updatedAt = updatedMatch[1].trim(); continue; }
+      // Parse metadata fields using shared parser
+      const metaField = parseMetadataField(line);
+      if (metaField) {
+        details[metaField.field] = metaField.value;
+        continue;
+      }
 
       // Description section
       if (line.match(/^DESCRIPTION/i)) {
@@ -541,10 +502,10 @@ export class GtPoller {
         }
       }
 
-      // Dependencies
-      const depMatch = line.match(/^\s*→\s*[○●]\s*(\S+):/);
-      if (depMatch) {
-        details.dependsOn.push(depMatch[1]);
+      // Dependencies using shared parser
+      const depId = parseDependency(line);
+      if (depId) {
+        details.dependsOn.push(depId);
       }
     }
 
@@ -553,16 +514,6 @@ export class GtPoller {
     }
 
     return details;
-  }
-
-  normalizePriority(p) {
-    if (!p) return null;
-    const lower = p.toLowerCase();
-    if (lower === 'p1' || lower === 'critical') return 'critical';
-    if (lower === 'p2' || lower === 'high') return 'high';
-    if (lower === 'p3' || lower === 'normal') return 'normal';
-    if (lower === 'p4' || lower === 'low') return 'low';
-    return lower;
   }
 
   async pollHooks() {
@@ -585,7 +536,7 @@ export class GtPoller {
                   env: { ...process.env, GT_ROLE: agent }
                 }
               );
-              const hookData = this.parseHookOutput(stdout, agent);
+              const hookData = this.parseHookOutputForPoller(stdout, agent);
               if (hookData) {
                 rigHooks[agent] = hookData;
               }
@@ -607,7 +558,7 @@ export class GtPoller {
                     timeout: 5000
                   }
                 );
-                const hookData = this.parseHookOutput(stdout, polecat);
+                const hookData = this.parseHookOutputForPoller(stdout, polecat);
                 if (hookData) {
                   rigHooks[`polecat/${polecat}`] = hookData;
                 }
@@ -630,7 +581,7 @@ export class GtPoller {
     }
   }
 
-  parseHookOutput(output, agent) {
+  parseHookOutputForPoller(output, agent) {
     // Try JSON first
     try {
       const data = JSON.parse(output);
@@ -647,20 +598,8 @@ export class GtPoller {
       return null;
     } catch {}
 
-    // Parse text output
-    // Look for "Hooked: <bead-id>: <title>" pattern
-    const hookedMatch = output.match(/Hooked:\s*(\S+)(?::\s*(.*))?/);
-    if (hookedMatch) {
-      return {
-        agent,
-        bead: hookedMatch[1],
-        title: hookedMatch[2] || '',
-        molecule: null,
-        autonomousMode: output.includes('AUTONOMOUS MODE'),
-        attachedAt: null
-      };
-    }
-
-    return null;
+    // Use shared parser for text output
+    const parsed = parseHookOutput(output);
+    return toPollerHookFormat(parsed, agent);
   }
 }

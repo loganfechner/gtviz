@@ -7,77 +7,10 @@
  * - Attached molecule (if any)
  */
 
-/**
- * Parse gt hook output into structured data
- * @param {string} output - Raw output from `gt hook` command
- * @returns {Object} Parsed hook status
- */
-export function parseHookOutput(output) {
-  const result = {
-    agentPath: null,
-    role: null,
-    autonomousMode: false,
-    hooked: null,
-    molecule: null
-  };
+import { parseHookOutput as parseHookOutputShared } from './parser-utils.js';
 
-  if (!output) {
-    return result;
-  }
-
-  const lines = output.split('\n');
-
-  for (const line of lines) {
-    // Parse hook status line: "🪝 Hook Status: gtviz/polecats/rictus"
-    const statusMatch = line.match(/Hook Status:\s*(.+)/);
-    if (statusMatch) {
-      result.agentPath = statusMatch[1].trim();
-      continue;
-    }
-
-    // Parse role line: "Role: polecat"
-    const roleMatch = line.match(/^Role:\s*(.+)/);
-    if (roleMatch) {
-      result.role = roleMatch[1].trim();
-      continue;
-    }
-
-    // Check for autonomous mode
-    if (line.includes('AUTONOMOUS MODE')) {
-      result.autonomousMode = true;
-      continue;
-    }
-
-    // Parse hooked bead: "🪝 Hooked: gt-z0n: P1: Parse and display hook status"
-    const hookedMatch = line.match(/Hooked:\s*([a-zA-Z0-9-]+):\s*(.+)/);
-    if (hookedMatch) {
-      result.hooked = {
-        id: hookedMatch[1].trim(),
-        title: hookedMatch[2].trim()
-      };
-      continue;
-    }
-
-    // Parse molecule: "🧬 Molecule: gt-wisp-by4:"
-    const moleculeMatch = line.match(/Molecule:\s*([a-zA-Z0-9-]+)/);
-    if (moleculeMatch) {
-      result.molecule = {
-        id: moleculeMatch[1].trim()
-      };
-      continue;
-    }
-
-    // Parse attached time: "   Attached: 2026-01-28T02:28:36Z"
-    if (result.molecule) {
-      const attachedMatch = line.match(/Attached:\s*(.+)/);
-      if (attachedMatch) {
-        result.molecule.attachedAt = attachedMatch[1].trim();
-      }
-    }
-  }
-
-  return result;
-}
+// Re-export the shared parser for backwards compatibility
+export const parseHookOutput = parseHookOutputShared;
 
 /**
  * Get hook status summary for display
