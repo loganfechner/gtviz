@@ -7,6 +7,31 @@
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+  let theme = 'dark';
+
+  function getSystemTheme() {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function initTheme() {
+    const stored = localStorage.getItem('gtviz-theme');
+    if (stored === 'light' || stored === 'dark') {
+      theme = stored;
+    } else {
+      theme = getSystemTheme();
+    }
+    applyTheme(theme);
+  }
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+  }
+
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('gtviz-theme', theme);
+    applyTheme(theme);
+  }
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -61,7 +86,19 @@
   }
 
   onMount(() => {
+    initTheme();
     connectWebSocket();
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    const handleChange = () => {
+      if (!localStorage.getItem('gtviz-theme')) {
+        theme = getSystemTheme();
+        applyTheme(theme);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => mediaQuery.removeEventListener('change', handleChange);
   });
 
   onDestroy(() => {
@@ -90,6 +127,9 @@
     <button on:click={requestPoll} disabled={!connected}>
       Refresh
     </button>
+    <button class="theme-toggle" on:click={toggleTheme} aria-label="Toggle theme">
+      {theme === 'dark' ? '☀️' : '🌙'}
+    </button>
   </header>
 
   <div class="layout">
@@ -113,6 +153,36 @@
 </main>
 
 <style>
+  :global(:root) {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #1f2544;
+    --border-color: #0f3460;
+    --text-primary: #eee;
+    --text-secondary: #ccc;
+    --text-muted: #888;
+    --text-dim: #666;
+    --accent: #e94560;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #ef4444;
+  }
+
+  :global([data-theme="light"]) {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f5f9;
+    --border-color: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --accent: #dc2626;
+    --success: #16a34a;
+    --warning: #ca8a04;
+    --error: #dc2626;
+  }
+
   :global(*) {
     margin: 0;
     padding: 0;
@@ -121,9 +191,10 @@
 
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #1a1a2e;
-    color: #eee;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
   }
 
   main {
@@ -137,13 +208,14 @@
     align-items: center;
     gap: 1rem;
     padding: 1rem 2rem;
-    background: #16213e;
-    border-bottom: 1px solid #0f3460;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s, border-color 0.2s;
   }
 
   h1 {
     font-size: 1.5rem;
-    color: #e94560;
+    color: var(--accent);
     font-weight: 700;
     letter-spacing: 0.05em;
   }
@@ -154,26 +226,26 @@
     gap: 0.5rem;
     margin-left: auto;
     font-size: 0.875rem;
-    color: #888;
+    color: var(--text-muted);
   }
 
   .indicator {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #666;
+    background: var(--text-dim);
   }
 
   .indicator.connected {
-    background: #4ade80;
-    box-shadow: 0 0 8px #4ade80;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
   }
 
   button {
     padding: 0.5rem 1rem;
-    background: #0f3460;
-    border: 1px solid #e94560;
-    color: #e94560;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent);
+    color: var(--accent);
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.875rem;
@@ -181,13 +253,26 @@
   }
 
   button:hover:not(:disabled) {
-    background: #e94560;
-    color: #fff;
+    background: var(--accent);
+    color: var(--bg-secondary);
   }
 
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .theme-toggle {
+    padding: 0.5rem;
+    font-size: 1rem;
+    line-height: 1;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+  }
+
+  .theme-toggle:hover {
+    background: var(--bg-primary);
+    color: inherit;
   }
 
   .layout {
@@ -205,7 +290,7 @@
   h2 {
     font-size: 1.25rem;
     margin-bottom: 1rem;
-    color: #e94560;
+    color: var(--accent);
   }
 
   .agent-grid {
@@ -216,13 +301,14 @@
 
   .sidebar {
     width: 350px;
-    background: #16213e;
-    border-left: 1px solid #0f3460;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
     overflow-y: auto;
+    transition: background 0.2s, border-color 0.2s;
   }
 
   .empty {
-    color: #666;
+    color: var(--text-dim);
     font-style: italic;
     padding: 2rem;
     text-align: center;

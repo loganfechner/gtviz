@@ -75,7 +75,7 @@
 
   h3 {
     font-size: 1rem;
-    color: #e94560;
+    color: var(--accent);
     margin-bottom: 1rem;
     display: flex;
     align-items: center;
@@ -96,8 +96,9 @@
   .stat {
     text-align: center;
     padding: 0.5rem;
-    background: #1a1a2e;
+    background: var(--bg-primary);
     border-radius: 4px;
+    transition: background 0.2s;
   }
 
   .stat-value {
@@ -107,31 +108,31 @@
   }
 
   .stat-value.active {
-    color: #4ade80;
+    color: var(--success);
   }
 
   .stat-value.hooked {
-    color: #fbbf24;
+    color: var(--warning);
   }
 
   .stat-value.idle {
-    color: #666;
+    color: var(--text-dim);
   }
 
   .stat-value.error {
-    color: #ef4444;
+    color: var(--error);
   }
 
   .stat-label {
     font-size: 0.75rem;
-    color: #888;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
   .divider {
     height: 1px;
-    background: #0f3460;
+    background: var(--border-color);
     margin: 1rem 0;
   }
 
@@ -146,14 +147,20 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem;
-    background: #1a1a2e;
+    background: var(--bg-primary);
     border-radius: 4px;
     font-size: 0.875rem;
+    transition: background 0.2s;
   }
 
   .hook-item.has-work {
     background: rgba(233, 69, 96, 0.1);
     border: 1px solid rgba(233, 69, 96, 0.2);
+  }
+
+  :global([data-theme="light"]) .hook-item.has-work {
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.2);
   }
 
   .hook-agent {
@@ -166,20 +173,20 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #444;
+    background: var(--text-dim);
   }
 
   .hook-status-dot.active {
-    background: #4ade80;
-    box-shadow: 0 0 6px #4ade80;
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
   }
 
   .hook-status-dot.hooked {
-    background: #fbbf24;
+    background: var(--warning);
   }
 
   .agent-name {
-    color: #ccc;
+    color: var(--text-secondary);
   }
 
   .hook-bead {
@@ -188,11 +195,11 @@
   }
 
   .bead-id {
-    color: #e94560;
+    color: var(--accent);
   }
 
   .hook-empty {
-    color: #555;
+    color: var(--text-dim);
     font-style: italic;
     font-size: 0.75rem;
   }
@@ -200,16 +207,16 @@
   .footer {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #0f3460;
+    border-top: 1px solid var(--border-color);
   }
 
   .last-updated {
     font-size: 0.75rem;
-    color: #555;
+    color: var(--text-dim);
   }
 
   .empty {
-    color: #555;
+    color: var(--text-dim);
     font-style: italic;
     text-align: center;
     padding: 1rem;

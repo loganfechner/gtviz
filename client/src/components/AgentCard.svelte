@@ -63,29 +63,29 @@
 
 <style>
   .card {
-    background: #1f2544;
-    border: 1px solid #0f3460;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1rem;
     transition: all 0.2s;
   }
 
   .card:hover {
-    border-color: #e94560;
+    border-color: var(--accent);
     box-shadow: 0 4px 12px rgba(233, 69, 96, 0.1);
   }
 
   .card.active {
-    border-color: #4ade80;
+    border-color: var(--success);
     box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
   }
 
   .card.hooked {
-    border-color: #fbbf24;
+    border-color: var(--warning);
   }
 
   .card.error {
-    border-color: #ef4444;
+    border-color: var(--error);
   }
 
   .header {
@@ -101,16 +101,16 @@
 
   .name {
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
   }
 
   .role-badge {
     margin-left: auto;
     font-size: 0.75rem;
     padding: 0.125rem 0.5rem;
-    background: #0f3460;
+    background: var(--border-color);
     border-radius: 4px;
-    color: #888;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -140,12 +140,12 @@
   .bead-id {
     font-family: monospace;
     font-size: 0.75rem;
-    color: #e94560;
+    color: var(--accent);
   }
 
   .bead-title {
     font-size: 0.875rem;
-    color: #ccc;
+    color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -157,7 +157,7 @@
     gap: 0.5rem;
     margin-top: 0.5rem;
     font-size: 0.75rem;
-    color: #888;
+    color: var(--text-muted);
   }
 
   .molecule-icon {
@@ -172,11 +172,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #ef4444;
+    color: var(--error);
   }
 
   .idle-info {
-    color: #666;
+    color: var(--text-dim);
     font-style: italic;
   }
 
@@ -186,19 +186,19 @@
     gap: 0.5rem;
     margin-top: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid #0f3460;
+    border-top: 1px solid var(--border-color);
   }
 
   .status-indicator {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #666;
+    background: var(--text-dim);
   }
 
   .status-indicator.active {
-    background: #4ade80;
-    box-shadow: 0 0 6px #4ade80;
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
     animation: pulse 2s infinite;
   }
 
@@ -209,7 +209,7 @@
 
   .status-text {
     font-size: 0.75rem;
-    color: #888;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
