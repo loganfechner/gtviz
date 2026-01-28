@@ -1,0 +1,21 @@
+{
+  "name": "gtviz",
+  "version": "0.1.0",
+  "description": "Real-time Gas Town Visualization",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "test": "node --test server/**/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "chokidar": "^3.5.3"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
