@@ -4,3 +4,5 @@
 .beads/
 node_modules/
 dist/
+client/dist/
+**/package-lock.json
