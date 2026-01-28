@@ -11,6 +11,50 @@
     connectWebSocket((isConnected) => {
       // Status now tracked via connectionStatus store
     });
+
+    // Keyboard shortcuts
+    function handleKeydown(e) {
+      // Ignore if typing in input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      // Number keys 1-9 for rig selection
+      if (e.key >= '1' && e.key <= '9') {
+        const index = parseInt(e.key) - 1;
+        if (index < rigs.length) {
+          selectedRig = rigs[index];
+        }
+        return;
+      }
+
+      // Escape to clear selection
+      if (e.key === 'Escape') {
+        selectedAgent = null;
+        return;
+      }
+
+      // Ctrl/Cmd + F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        const searchInput = document.querySelector('.filter-bar input');
+        if (searchInput) searchInput.focus();
+        return;
+      }
+
+      // Arrow keys for agent navigation
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (!filteredAgents.length) return;
+        const currentIndex = selectedAgent
+          ? filteredAgents.findIndex(a => a.name === selectedAgent.name)
+          : -1;
+        const nextIndex = e.key === 'ArrowRight'
+          ? Math.min(currentIndex + 1, filteredAgents.length - 1)
+          : Math.max(currentIndex - 1, 0);
+        selectedAgent = filteredAgents[nextIndex];
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
   });
 
   $: connected = $connectionStatus.connected;
