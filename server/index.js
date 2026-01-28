@@ -48,6 +48,16 @@ app.get('/api/rigs', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error('server', `Port ${PORT} is already in use`, { port: PORT, error: err.code });
+    logger.info('server', `Try: kill $(lsof -ti:${PORT}) or use PORT=3002 npm run server`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(PORT, () => {
   logger.info('server', 'gtviz server started', { port: PORT, url: `http://localhost:${PORT}` });
   gtPoller.start();
