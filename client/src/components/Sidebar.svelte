@@ -58,15 +58,15 @@
 <style>
   .sidebar {
     width: 320px;
-    background: #161b22;
-    border-left: 1px solid #30363d;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-primary);
     display: flex;
     flex-direction: column;
   }
 
   .tabs {
     display: flex;
-    border-bottom: 1px solid #30363d;
+    border-bottom: 1px solid var(--border-primary);
     padding: 0 8px;
   }
 
@@ -76,19 +76,19 @@
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s;
   }
 
   .tabs button:hover {
-    color: #c9d1d9;
+    color: var(--text-primary);
   }
 
   .tabs button.active {
-    color: #58a6ff;
-    border-bottom-color: #58a6ff;
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
   }
 
   .content {

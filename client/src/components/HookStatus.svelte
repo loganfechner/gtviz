@@ -54,20 +54,20 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 12px;
   }
 
   .empty {
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-size: 13px;
     text-align: center;
     padding: 20px;
   }
 
   .hook {
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px 12px;
     margin-bottom: 8px;
@@ -83,7 +83,7 @@
   .hook-agent {
     font-size: 12px;
     font-weight: 600;
-    color: #f0883e;
+    color: var(--accent-orange);
   }
 
   .badge {
@@ -95,47 +95,47 @@
   }
 
   .badge.autonomous {
-    background: #238636;
+    background: var(--accent-green);
     color: #fff;
   }
 
   .hook-content {
     padding-left: 8px;
-    border-left: 2px solid #238636;
+    border-left: 2px solid var(--accent-green);
   }
 
   .hook-bead {
     font-family: monospace;
     font-size: 12px;
-    color: #58a6ff;
+    color: var(--accent-blue);
   }
 
   .hook-title {
     font-size: 11px;
-    color: #c9d1d9;
+    color: var(--text-primary);
     margin-top: 4px;
   }
 
   .hook-molecule {
     font-size: 10px;
-    color: #a371f7;
+    color: var(--accent-purple);
     margin-top: 4px;
     font-family: monospace;
   }
 
   .hook-time {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     margin-top: 4px;
   }
 
   .label {
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .hook-empty {
     font-size: 12px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-style: italic;
   }
 </style>

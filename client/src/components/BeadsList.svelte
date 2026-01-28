@@ -3,10 +3,10 @@
 
   function getStatusColor(status) {
     switch (status) {
-      case 'open': return '#58a6ff';
-      case 'in_progress': return '#f0883e';
-      case 'done': return '#3fb950';
-      default: return '#8b949e';
+      case 'open': return 'var(--accent-blue)';
+      case 'in_progress': return 'var(--accent-orange)';
+      case 'done': return 'var(--accent-green)';
+      default: return 'var(--text-secondary)';
     }
   }
 </script>
@@ -39,20 +39,20 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 12px;
   }
 
   .empty {
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-size: 13px;
     text-align: center;
     padding: 20px;
   }
 
   .bead {
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px 12px;
     margin-bottom: 8px;
@@ -68,7 +68,7 @@
   .bead-id {
     font-family: monospace;
     font-size: 11px;
-    color: #58a6ff;
+    color: var(--accent-blue);
   }
 
   .bead-status {
@@ -79,13 +79,13 @@
 
   .bead-title {
     font-size: 13px;
-    color: #e6edf3;
+    color: var(--text-primary);
     line-height: 1.4;
   }
 
   .bead-owner {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-top: 6px;
   }
 </style>

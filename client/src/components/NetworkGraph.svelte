@@ -277,13 +277,13 @@
 
   function getRoleColor(role) {
     const colors = {
-      mayor: '#f0883e',
-      witness: '#a371f7',
-      refinery: '#3fb950',
-      crew: '#58a6ff',
-      polecat: '#db61a2'
+      mayor: 'var(--role-mayor)',
+      witness: 'var(--role-witness)',
+      refinery: 'var(--accent-green)',
+      crew: 'var(--role-crew)',
+      polecat: 'var(--role-polecat)'
     };
-    return colors[role] || '#8b949e';
+    return colors[role] || 'var(--text-secondary)';
   }
 </script>
 
@@ -299,7 +299,7 @@
         markerHeight="6"
         orient="auto"
       >
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#30363d"/>
+        <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-default"/>
       </marker>
       <marker
         id="arrowhead-active"
@@ -310,7 +310,7 @@
         markerHeight="6"
         orient="auto"
       >
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff"/>
+        <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-active"/>
       </marker>
     </defs>
 
@@ -319,11 +319,11 @@
       {@const source = getNodePosition(link.source?.id || link.source)}
       {@const target = getNodePosition(link.target?.id || link.target)}
       <line
+        class="link-structural"
         x1={source.x}
         y1={source.y}
         x2={target.x}
         y2={target.y}
-        stroke="#21262d"
         stroke-width="1"
         stroke-dasharray="4,4"
       />
@@ -334,11 +334,11 @@
       {@const source = getNodePosition(link.source?.id || link.source)}
       {@const target = getNodePosition(link.target?.id || link.target)}
       <line
+        class="link-active"
         x1={source.x}
         y1={source.y}
         x2={target.x}
         y2={target.y}
-        stroke="#30363d"
         stroke-width="2"
         marker-end="url(#arrowhead)"
       />
@@ -354,7 +354,6 @@
         y1={source.y}
         x2={target.x}
         y2={target.y}
-        stroke="#58a6ff"
         stroke-width="3"
         marker-end="url(#arrowhead-active)"
       />
@@ -364,7 +363,6 @@
         cy={target.y}
         r="20"
         fill="none"
-        stroke="#58a6ff"
       />
     {/each}
   </svg>
@@ -392,13 +390,37 @@
     width: 100%;
     height: 100%;
     position: relative;
-    background: radial-gradient(circle at center, #161b22 0%, #0d1117 100%);
+    background: radial-gradient(circle at center, var(--graph-bg-end) 0%, var(--graph-bg-start) 100%);
   }
 
   svg {
     position: absolute;
     top: 0;
     left: 0;
+  }
+
+  .arrow-default {
+    fill: var(--graph-edge);
+  }
+
+  .arrow-active {
+    fill: var(--accent-blue);
+  }
+
+  .link-structural {
+    stroke: var(--border-secondary);
+  }
+
+  .link-active {
+    stroke: var(--graph-edge);
+  }
+
+  .animated-edge {
+    stroke: var(--accent-blue);
+  }
+
+  .pulse {
+    stroke: var(--accent-blue);
   }
 
   .cards {

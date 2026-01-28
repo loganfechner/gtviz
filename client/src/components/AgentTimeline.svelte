@@ -10,11 +10,11 @@
 
   function getStatusColor(status) {
     switch (status) {
-      case 'running': return '#3fb950';
-      case 'idle': return '#58a6ff';
-      case 'stopped': return '#f85149';
-      case 'killed': return '#f85149';
-      default: return '#8b949e';
+      case 'running': return 'var(--accent-green)';
+      case 'idle': return 'var(--accent-blue)';
+      case 'stopped': return 'var(--accent-red)';
+      case 'killed': return 'var(--accent-red)';
+      default: return 'var(--text-secondary)';
     }
   }
 
@@ -76,27 +76,27 @@
   h3 {
     font-size: 14px;
     font-weight: 600;
-    color: #e6edf3;
+    color: var(--text-primary);
     margin: 0;
   }
 
   .export-btn {
     padding: 4px 10px;
     font-size: 11px;
-    background: #21262d;
-    border: 1px solid #30363d;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
     border-radius: 4px;
-    color: #c9d1d9;
+    color: var(--text-primary);
     cursor: pointer;
     transition: background 0.15s;
   }
 
   .export-btn:hover {
-    background: #30363d;
+    background: var(--bg-hover);
   }
 
   .empty {
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-size: 13px;
     text-align: center;
     padding: 24px;
@@ -127,7 +127,7 @@
     top: 10px;
     bottom: 0;
     width: 2px;
-    background: #30363d;
+    background: var(--border-primary);
   }
 
   .line.last {
@@ -149,7 +149,7 @@
 
   .time {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-family: monospace;
   }
 </style>

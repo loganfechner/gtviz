@@ -1,0 +1,157 @@
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-hover: #30363d;
+
+  /* Borders */
+  --border-primary: #30363d;
+  --border-secondary: #21262d;
+
+  /* Text */
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+
+  /* Accent colors */
+  --accent-blue: #58a6ff;
+  --accent-green: #3fb950;
+  --accent-orange: #f0883e;
+  --accent-red: #f85149;
+  --accent-purple: #a371f7;
+  --accent-pink: #db61a2;
+
+  /* Status colors */
+  --status-running: #3fb950;
+  --status-running-bg: #23863666;
+  --status-idle: #8b949e;
+  --status-idle-bg: #8b949e33;
+  --status-stopped: #f85149;
+  --status-stopped-bg: #f8514966;
+  --status-killed: #f85149;
+  --status-killed-bg: #f8514966;
+
+  /* Role colors */
+  --role-mayor: #f0883e;
+  --role-witness: #a371f7;
+  --role-refinery: #58a6ff;
+  --role-crew: #8b949e;
+  --role-polecat: #db61a2;
+
+  /* Graph specific */
+  --graph-bg-start: #0d1117;
+  --graph-bg-end: #161b22;
+  --graph-grid: #21262d;
+  --graph-edge: #30363d;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+
+  /* Aliases for backward compatibility */
+  --accent: var(--accent-blue);
+  --success: var(--accent-green);
+  --warning: var(--accent-orange);
+  --error: var(--accent-red);
+  --text-muted: var(--text-secondary);
+  --text-dim: var(--text-secondary);
+  --text-faint: var(--text-tertiary);
+  --border-color: var(--border-primary);
+}
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eaeef2;
+  --bg-hover: #d0d7de;
+
+  /* Borders */
+  --border-primary: #d0d7de;
+  --border-secondary: #e5ebf0;
+
+  /* Text */
+  --text-primary: #24292f;
+  --text-secondary: #57606a;
+  --text-tertiary: #848d97;
+
+  /* Accent colors */
+  --accent-blue: #0969da;
+  --accent-green: #1a7f37;
+  --accent-orange: #bf6300;
+  --accent-red: #cf222e;
+  --accent-purple: #8250df;
+  --accent-pink: #bf3989;
+
+  /* Status colors */
+  --status-running: #1a7f37;
+  --status-running-bg: #dafbe1;
+  --status-idle: #57606a;
+  --status-idle-bg: #eaeef2;
+  --status-stopped: #cf222e;
+  --status-stopped-bg: #ffebe9;
+  --status-killed: #cf222e;
+  --status-killed-bg: #ffebe9;
+
+  /* Role colors */
+  --role-mayor: #bf6300;
+  --role-witness: #8250df;
+  --role-refinery: #0969da;
+  --role-crew: #57606a;
+  --role-polecat: #bf3989;
+
+  /* Graph specific */
+  --graph-bg-start: #ffffff;
+  --graph-bg-end: #f6f8fa;
+  --graph-grid: #e5ebf0;
+  --graph-edge: #d0d7de;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+
+  /* Aliases for backward compatibility */
+  --accent: var(--accent-blue);
+  --success: var(--accent-green);
+  --warning: var(--accent-orange);
+  --error: var(--accent-red);
+  --text-muted: var(--text-secondary);
+  --text-dim: var(--text-secondary);
+  --text-faint: var(--text-tertiary);
+  --border-color: var(--border-primary);
+}
+
+/* Global resets that use theme variables */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
+}

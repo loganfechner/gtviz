@@ -79,13 +79,13 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 12px;
   }
 
   h4 {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin: 16px 0 8px;
   }
 
@@ -96,8 +96,8 @@
   }
 
   .metric-card {
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px;
     text-align: center;
@@ -106,18 +106,18 @@
   .metric-value {
     font-size: 20px;
     font-weight: 600;
-    color: #58a6ff;
+    color: var(--accent-blue);
   }
 
   .metric-label {
     font-size: 11px;
-    color: #c9d1d9;
+    color: var(--text-primary);
     margin-top: 4px;
   }
 
   .metric-detail {
     font-size: 9px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     margin-top: 2px;
   }
 
@@ -134,14 +134,14 @@
 
   .activity-label {
     font-size: 10px;
-    color: #8b949e;
+    color: var(--text-secondary);
     width: 50px;
   }
 
   .activity-bar {
     flex: 1;
     height: 8px;
-    background: #21262d;
+    background: var(--bg-tertiary);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -152,13 +152,13 @@
     transition: width 0.3s ease;
   }
 
-  .bar-fill.active { background: #3fb950; }
-  .bar-fill.hooked { background: #f0883e; }
-  .bar-fill.idle { background: #8b949e; }
+  .bar-fill.active { background: var(--accent-green); }
+  .bar-fill.hooked { background: var(--accent-orange); }
+  .bar-fill.idle { background: var(--text-secondary); }
 
   .activity-count {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     width: 20px;
     text-align: right;
   }

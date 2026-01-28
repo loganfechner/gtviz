@@ -27,10 +27,10 @@
 
   function getEventColor(type) {
     switch (type) {
-      case 'mail': return '#58a6ff';
-      case 'gt_event': return '#f0883e';
-      case 'feed': return '#a371f7';
-      default: return '#8b949e';
+      case 'mail': return 'var(--accent-blue)';
+      case 'gt_event': return 'var(--accent-orange)';
+      case 'feed': return 'var(--accent-purple)';
+      default: return 'var(--text-secondary)';
     }
   }
 </script>
@@ -82,12 +82,12 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 12px;
   }
 
   .empty {
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-size: 13px;
     text-align: center;
     padding: 20px;
@@ -102,7 +102,7 @@
     display: flex;
     gap: 10px;
     padding: 8px 0;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--border-secondary);
   }
 
   .event:last-child {
@@ -131,28 +131,28 @@
   .event-type {
     font-size: 11px;
     text-transform: uppercase;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-weight: 500;
   }
 
   .event-time {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-family: monospace;
   }
 
   .event-detail {
     font-size: 12px;
-    color: #c9d1d9;
+    color: var(--text-primary);
   }
 
   .event-preview {
     font-size: 11px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-family: monospace;
     margin-top: 4px;
     padding: 4px 6px;
-    background: #0d1117;
+    background: var(--bg-primary);
     border-radius: 4px;
     white-space: nowrap;
     overflow: hidden;

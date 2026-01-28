@@ -4,6 +4,7 @@
   import Sidebar from './components/Sidebar.svelte';
   import FilterBar from './components/FilterBar.svelte';
   import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
+  import ThemeToggle from './components/ThemeToggle.svelte';
 
   let selectedRig = null;
 
@@ -108,6 +109,7 @@
     <div class="status" class:connected>
       {statusText}
     </div>
+    <ThemeToggle />
   </header>
 
   <FilterBar
@@ -144,22 +146,22 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: #0d1117;
+    background: var(--bg-primary);
   }
 
   header {
     display: flex;
     align-items: center;
     padding: 12px 20px;
-    background: #161b22;
-    border-bottom: 1px solid #30363d;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
     gap: 20px;
   }
 
   h1 {
     font-size: 18px;
     font-weight: 600;
-    color: #58a6ff;
+    color: var(--accent-blue);
     margin: 0;
   }
 
@@ -170,37 +172,37 @@
 
   .rig-selector button {
     padding: 6px 12px;
-    background: #21262d;
-    border: 1px solid #30363d;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
     border-radius: 6px;
-    color: #c9d1d9;
+    color: var(--text-primary);
     cursor: pointer;
     font-size: 13px;
     transition: all 0.15s;
   }
 
   .rig-selector button:hover {
-    background: #30363d;
+    background: var(--bg-hover);
   }
 
   .rig-selector button.active {
-    background: #238636;
-    border-color: #238636;
+    background: var(--accent-green);
+    border-color: var(--accent-green);
     color: white;
   }
 
   .status {
     margin-left: auto;
     padding: 4px 10px;
-    background: #f8514966;
+    background: var(--status-stopped-bg);
     border-radius: 12px;
     font-size: 12px;
-    color: #f85149;
+    color: var(--status-stopped);
   }
 
   .status.connected {
-    background: #23863666;
-    color: #3fb950;
+    background: var(--status-running-bg);
+    color: var(--status-running);
   }
 
   main {

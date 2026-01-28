@@ -39,20 +39,20 @@
 
 <style>
   .card {
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
     border-left: 3px solid var(--accent);
     border-radius: 8px;
     padding: 10px 12px;
     min-width: 140px;
     max-width: 180px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: var(--shadow-md);
     transition: transform 0.15s, box-shadow 0.15s;
   }
 
   .card:hover {
     transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg);
   }
 
   .header {
@@ -78,34 +78,34 @@
   }
 
   .status.running {
-    background: #23863633;
-    color: #3fb950;
+    background: var(--status-running-bg);
+    color: var(--status-running);
   }
 
   .status.idle {
-    background: #58a6ff22;
-    color: #58a6ff;
+    background: var(--status-idle-bg);
+    color: var(--accent-blue);
   }
 
   .status.stopped {
-    background: #f8514933;
-    color: #f85149;
+    background: var(--status-stopped-bg);
+    color: var(--status-stopped);
   }
 
   .status.killed {
-    background: #f8514966;
-    color: #f85149;
+    background: var(--status-killed-bg);
+    color: var(--status-killed);
   }
 
   .status.unknown {
-    background: #8b949e22;
-    color: #8b949e;
+    background: var(--status-idle-bg);
+    color: var(--text-secondary);
   }
 
   .name {
     font-size: 13px;
     font-weight: 600;
-    color: #e6edf3;
+    color: var(--text-primary);
     margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -114,7 +114,7 @@
 
   .task {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -122,11 +122,11 @@
 
   .output {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-tertiary);
     font-family: monospace;
     margin-top: 4px;
     padding: 4px 6px;
-    background: #0d1117;
+    background: var(--bg-primary);
     border-radius: 4px;
     white-space: nowrap;
     overflow: hidden;
