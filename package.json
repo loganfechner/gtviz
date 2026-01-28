@@ -19,7 +19,7 @@
     "server": "node server/index.js",
     "client": "cd client && npm run dev",
     "build": "cd client && npm run build",
-    "test": "node --test test/ server/**/*.test.js"
+    "test": "node --test 'test/**/*.test.js' 'server/**/*.test.js'"
   },
   "keywords": [
     "gas-town",
