@@ -2,8 +2,15 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import RigCluster from './components/RigCluster.svelte';
+  import Breadcrumb from './components/Breadcrumb.svelte';
 
-  let hooks = {};
+  // View state: 'overview' or 'rig'
+  let currentView = 'overview';
+  let selectedRig = null;
+
+  // Data state
+  let rigs = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
@@ -43,12 +50,12 @@
   function handleMessage(message) {
     switch (message.type) {
       case 'initial':
-        hooks = message.data.hooks || {};
+        rigs = message.data.rigs || {};
         lastUpdated = message.timestamp;
         break;
 
-      case 'hooks:updated':
-        hooks = message.data.hooks || {};
+      case 'rigs:updated':
+        rigs = message.data.rigs || {};
         lastUpdated = message.timestamp;
         break;
     }
@@ -57,6 +64,18 @@
   function requestPoll() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'poll:now' }));
+    }
+  }
+
+  function handleRigSelect(event) {
+    selectedRig = event.detail.rigName;
+    currentView = 'rig';
+  }
+
+  function handleNavigate(event) {
+    if (event.detail.view === 'overview') {
+      currentView = 'overview';
+      selectedRig = null;
     }
   }
 
@@ -70,19 +89,54 @@
     }
   });
 
-  $: agentList = Object.values(hooks).sort((a, b) => {
-    // Sort by role priority: witness, refinery, polecats
-    const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
-    const orderA = roleOrder[a.role] ?? 3;
-    const orderB = roleOrder[b.role] ?? 3;
-    if (orderA !== orderB) return orderA - orderB;
-    return a.agent.localeCompare(b.agent);
-  });
+  // Computed values
+  $: rigList = Object.values(rigs).sort((a, b) => a.name.localeCompare(b.name));
+
+  $: currentRigData = selectedRig ? rigs[selectedRig] : null;
+
+  $: agentList = currentRigData
+    ? Object.values(currentRigData.agents || {}).sort((a, b) => {
+        // Sort by role priority: witness, refinery, polecats
+        const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
+        const orderA = roleOrder[a.role] ?? 3;
+        const orderB = roleOrder[b.role] ?? 3;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.agent.localeCompare(b.agent);
+      })
+    : [];
+
+  // Get hooks for sidebar - either current rig or all rigs combined
+  $: sidebarHooks = currentRigData
+    ? currentRigData.agents || {}
+    : Object.values(rigs).reduce((acc, rig) => {
+        for (const [agentName, agent] of Object.entries(rig.agents || {})) {
+          acc[`${rig.name}/${agentName}`] = { ...agent, rig: rig.name };
+        }
+        return acc;
+      }, {});
+
+  // Town-level summary
+  $: townSummary = rigList.reduce(
+    (acc, rig) => {
+      const s = rig.summary || {};
+      acc.totalRigs += 1;
+      acc.totalAgents += s.total || 0;
+      acc.active += s.active || 0;
+      acc.hooked += s.hooked || 0;
+      acc.idle += s.idle || 0;
+      acc.error += s.error || 0;
+      return acc;
+    },
+    { totalRigs: 0, totalAgents: 0, active: 0, hooked: 0, idle: 0, error: 0 }
+  );
 </script>
 
 <main>
   <header>
     <h1>gtviz</h1>
+    {#if currentView === 'rig'}
+      <Breadcrumb currentRig={selectedRig} on:navigate={handleNavigate} />
+    {/if}
     <div class="status">
       <span class="indicator" class:connected></span>
       {connected ? 'Connected' : 'Disconnected'}
@@ -94,20 +148,45 @@
 
   <div class="layout">
     <div class="main-area">
-      <h2>Agents</h2>
-      <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
-        {/each}
+      {#if currentView === 'overview'}
+        <!-- Overview Mode: Show all rigs as clusters -->
+        <div class="overview-header">
+          <h2>Gas Town Overview</h2>
+          <div class="town-stats">
+            <span class="town-stat">{townSummary.totalRigs} rigs</span>
+            <span class="town-stat">{townSummary.totalAgents} agents</span>
+            {#if townSummary.active > 0}
+              <span class="town-stat active">{townSummary.active} active</span>
+            {/if}
+          </div>
+        </div>
 
-        {#if agentList.length === 0}
-          <p class="empty">No agents discovered yet...</p>
-        {/if}
-      </div>
+        <div class="rig-grid">
+          {#each rigList as rig (rig.name)}
+            <RigCluster {rig} on:select={handleRigSelect} />
+          {/each}
+
+          {#if rigList.length === 0}
+            <p class="empty">No rigs discovered yet...</p>
+          {/if}
+        </div>
+      {:else}
+        <!-- Single Rig Mode: Show agents in detail -->
+        <h2>{selectedRig}</h2>
+        <div class="agent-grid">
+          {#each agentList as agent (agent.agent)}
+            <AgentCard {agent} />
+          {/each}
+
+          {#if agentList.length === 0}
+            <p class="empty">No agents in this rig...</p>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <aside class="sidebar">
-      <HookStatusPanel {hooks} {lastUpdated} />
+      <HookStatusPanel hooks={sidebarHooks} {lastUpdated} showRig={currentView === 'overview'} />
     </aside>
   </div>
 </main>
@@ -202,10 +281,40 @@
     overflow-y: auto;
   }
 
+  .overview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
   h2 {
     font-size: 1.25rem;
-    margin-bottom: 1rem;
     color: #e94560;
+  }
+
+  .town-stats {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .town-stat {
+    font-size: 0.875rem;
+    color: #888;
+    padding: 0.25rem 0.75rem;
+    background: #0f3460;
+    border-radius: 4px;
+  }
+
+  .town-stat.active {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+  }
+
+  .rig-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
   }
 
   .agent-grid {

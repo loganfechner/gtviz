@@ -1,8 +1,12 @@
 <script>
   export let hooks = {};
   export let lastUpdated = null;
+  export let showRig = false;
 
-  $: hookList = Object.values(hooks);
+  $: hookList = Object.entries(hooks).map(([key, hook]) => ({
+    ...hook,
+    displayName: showRig && hook.rig ? `${hook.rig}/${hook.agent}` : hook.agent
+  }));
   $: activeCount = hookList.filter(h => h.status === 'active').length;
   $: hookedCount = hookList.filter(h => h.beadId).length;
   $: idleCount = hookList.filter(h => !h.beadId && h.status !== 'error').length;
@@ -42,11 +46,11 @@
   <div class="divider"></div>
 
   <div class="hook-list">
-    {#each hookList as hook (hook.agent)}
+    {#each hookList as hook (hook.displayName)}
       <div class="hook-item" class:has-work={hook.beadId}>
         <div class="hook-agent">
           <span class="hook-status-dot" class:active={hook.status === 'active'} class:hooked={hook.beadId && hook.status !== 'active'}></span>
-          <span class="agent-name">{hook.agent}</span>
+          <span class="agent-name">{hook.displayName}</span>
         </div>
         {#if hook.beadId}
           <div class="hook-bead">

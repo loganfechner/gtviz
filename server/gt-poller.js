@@ -2,7 +2,7 @@
  * GT Command Poller
  *
  * Periodically polls `gt hook` for each agent directory
- * to track hook status across the rig.
+ * to track hook status across all rigs in the town.
  */
 
 import { exec } from 'child_process';
@@ -12,6 +12,53 @@ import path from 'path';
 import fs from 'fs';
 
 const execAsync = promisify(exec);
+
+// Directories to skip when discovering rigs
+const SKIP_DIRS = new Set([
+  '.beads', '.claude', '.git', '.runtime',
+  'logs', 'plugins', 'settings', 'mayor',
+  'node_modules', 'abqm_history_db'
+]);
+
+/**
+ * Discover all rigs in the town directory
+ * @param {string} townPath - Path to the town directory
+ * @returns {Promise<Array>} List of rig info objects
+ */
+export async function discoverRigs(townPath) {
+  const rigs = [];
+
+  if (!fs.existsSync(townPath)) {
+    return rigs;
+  }
+
+  const entries = fs.readdirSync(townPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) {
+      continue;
+    }
+
+    const rigPath = path.join(townPath, entry.name);
+
+    // A valid rig has a polecats directory or is a recognized agent type
+    const hasPolecats = fs.existsSync(path.join(rigPath, 'polecats'));
+    const hasWitness = fs.existsSync(path.join(rigPath, 'witness'));
+    const hasRefinery = fs.existsSync(path.join(rigPath, 'refinery'));
+
+    if (hasPolecats || hasWitness || hasRefinery) {
+      rigs.push({
+        name: entry.name,
+        path: rigPath,
+        hasPolecats,
+        hasWitness,
+        hasRefinery
+      });
+    }
+  }
+
+  return rigs;
+}
 
 /**
  * Discover agent directories in a rig
@@ -117,13 +164,52 @@ export async function pollAllAgentHooks(rigPath) {
 }
 
 /**
+ * Poll all rigs in the town
+ * @param {string} townPath - Path to the town directory
+ * @returns {Promise<Object>} Map of rig name to rig data (with agents)
+ */
+export async function pollAllRigs(townPath) {
+  const rigs = await discoverRigs(townPath);
+  const rigData = {};
+
+  await Promise.all(
+    rigs.map(async (rig) => {
+      const agents = await pollAllAgentHooks(rig.path);
+
+      // Calculate summary stats
+      const agentList = Object.values(agents);
+      const activeCount = agentList.filter(a => a.status === 'active').length;
+      const hookedCount = agentList.filter(a => a.beadId).length;
+      const idleCount = agentList.filter(a => !a.beadId && a.status !== 'error').length;
+      const errorCount = agentList.filter(a => a.status === 'error').length;
+
+      rigData[rig.name] = {
+        name: rig.name,
+        path: rig.path,
+        agents,
+        summary: {
+          total: agentList.length,
+          active: activeCount,
+          hooked: hookedCount,
+          idle: idleCount,
+          error: errorCount
+        },
+        lastUpdated: new Date().toISOString()
+      };
+    })
+  );
+
+  return rigData;
+}
+
+/**
  * Create a hook poller that updates state periodically
- * @param {string} rigPath - Path to the rig directory
- * @param {Function} onUpdate - Callback when hooks are updated
+ * @param {string} townPath - Path to the town directory
+ * @param {Function} onUpdate - Callback when rigs are updated
  * @param {number} intervalMs - Polling interval in milliseconds
  * @returns {Object} Poller control object
  */
-export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
+export function createHookPoller(townPath, onUpdate, intervalMs = 5000) {
   let intervalId = null;
   let isRunning = false;
 
@@ -131,8 +217,8 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
     if (!isRunning) return;
 
     try {
-      const hooks = await pollAllAgentHooks(rigPath);
-      onUpdate(hooks);
+      const rigData = await pollAllRigs(townPath);
+      onUpdate(rigData);
     } catch (error) {
       console.error('Hook polling error:', error);
     }
@@ -155,7 +241,7 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
     },
 
     async pollNow() {
-      return pollAllAgentHooks(rigPath);
+      return pollAllRigs(townPath);
     }
   };
 }

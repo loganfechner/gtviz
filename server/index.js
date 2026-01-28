@@ -3,6 +3,7 @@
  *
  * Express + WebSocket server for real-time Gas Town visualization.
  * Polls agent hooks and pushes updates to connected clients.
+ * Supports multi-rig overview with drill-down to individual rigs.
  */
 
 import express from 'express';
@@ -10,7 +11,8 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createHookPoller } from './gt-poller.js';
+import fs from 'fs';
+import { createHookPoller, discoverRigs, pollAllRigs } from './gt-poller.js';
 import { createStateManager } from './state.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +20,7 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const PORT = process.env.PORT || 3000;
-const RIG_PATH = process.env.RIG_PATH || path.resolve(__dirname, '../../..');
+const TOWN_PATH = process.env.TOWN_PATH || path.resolve(__dirname, '../../../..');
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000', 10);
 
 // Initialize Express
@@ -28,12 +30,12 @@ const server = createServer(app);
 // Initialize WebSocket
 const wss = new WebSocketServer({ server });
 
-// Initialize state manager
+// Initialize state manager with multi-rig support
 const stateManager = createStateManager();
 
-// Initialize hook poller
-const hookPoller = createHookPoller(RIG_PATH, (hooks) => {
-  stateManager.updateHooks(hooks);
+// Initialize multi-rig poller
+const hookPoller = createHookPoller(TOWN_PATH, (rigData) => {
+  stateManager.updateRigs(rigData);
 }, POLL_INTERVAL);
 
 // Subscribe to state changes and broadcast to WebSocket clients
@@ -64,8 +66,8 @@ wss.on('connection', (ws) => {
 
       if (message.type === 'poll:now') {
         // Client requests immediate poll
-        const hooks = await hookPoller.pollNow();
-        stateManager.updateHooks(hooks);
+        const rigData = await hookPoller.pollNow();
+        stateManager.updateRigs(rigData);
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
@@ -83,10 +85,34 @@ app.use(express.json());
 // Serve static files from client build
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
-// API: Get current hook status
-app.get('/api/hooks', (req, res) => {
+// API: Get all rigs overview
+app.get('/api/rigs', (req, res) => {
   res.json({
-    hooks: stateManager.getHooks(),
+    rigs: stateManager.getRigs(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get specific rig details
+app.get('/api/rigs/:rigName', (req, res) => {
+  const rigData = stateManager.getRig(req.params.rigName);
+  if (!rigData) {
+    return res.status(404).json({ error: 'Rig not found' });
+  }
+  res.json({
+    rig: rigData,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get agents for a specific rig (legacy hooks endpoint)
+app.get('/api/rigs/:rigName/agents', (req, res) => {
+  const rigData = stateManager.getRig(req.params.rigName);
+  if (!rigData) {
+    return res.status(404).json({ error: 'Rig not found' });
+  }
+  res.json({
+    agents: rigData.agents || {},
     timestamp: new Date().toISOString()
   });
 });
@@ -102,10 +128,10 @@ app.get('/api/state', (req, res) => {
 // API: Trigger immediate poll
 app.post('/api/poll', async (req, res) => {
   try {
-    const hooks = await hookPoller.pollNow();
-    stateManager.updateHooks(hooks);
+    const rigData = await hookPoller.pollNow();
+    stateManager.updateRigs(rigData);
     res.json({
-      hooks: stateManager.getHooks(),
+      rigs: stateManager.getRigs(),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -117,9 +143,10 @@ app.post('/api/poll', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    rigPath: RIG_PATH,
+    townPath: TOWN_PATH,
     pollInterval: POLL_INTERVAL,
     connectedClients: wss.clients.size,
+    rigCount: Object.keys(stateManager.getRigs()).length,
     timestamp: new Date().toISOString()
   });
 });
@@ -132,7 +159,7 @@ app.get('*', (req, res) => {
 // Start server
 server.listen(PORT, () => {
   console.log(`gtviz server running on http://localhost:${PORT}`);
-  console.log(`Monitoring rig: ${RIG_PATH}`);
+  console.log(`Monitoring town: ${TOWN_PATH}`);
   console.log(`Poll interval: ${POLL_INTERVAL}ms`);
 
   // Start polling

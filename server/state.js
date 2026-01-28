@@ -2,7 +2,8 @@
  * State Manager
  *
  * Manages in-memory state for the gtviz server.
- * Tracks agents, hooks, and notifies subscribers of changes.
+ * Tracks rigs, agents, hooks, and notifies subscribers of changes.
+ * Supports multi-rig overview with drill-down to individual rigs.
  */
 
 /**
@@ -11,8 +12,7 @@
  */
 export function createStateManager() {
   const state = {
-    agents: {},      // Map of agent name -> agent info
-    hooks: {},       // Map of agent name -> hook status
+    rigs: {},        // Map of rig name -> rig data (agents, summary)
     lastUpdated: null
   };
 
@@ -43,42 +43,76 @@ export function createStateManager() {
     },
 
     /**
-     * Get all hook statuses
+     * Get all rigs
      */
-    getHooks() {
-      return { ...state.hooks };
+    getRigs() {
+      return { ...state.rigs };
     },
 
     /**
-     * Update hook status for all agents
-     * @param {Object} hooks - Map of agent name to hook status
+     * Get specific rig data
+     * @param {string} rigName - Name of the rig
      */
-    updateHooks(hooks) {
+    getRig(rigName) {
+      return state.rigs[rigName] || null;
+    },
+
+    /**
+     * Update rig data for all rigs
+     * @param {Object} rigData - Map of rig name to rig data
+     */
+    updateRigs(rigData) {
       const changes = [];
 
-      for (const [agentName, hookStatus] of Object.entries(hooks)) {
-        const previous = state.hooks[agentName];
+      for (const [rigName, newRigData] of Object.entries(rigData)) {
+        const previous = state.rigs[rigName];
 
-        // Check if anything changed
-        if (!previous ||
-            previous.beadId !== hookStatus.beadId ||
-            previous.status !== hookStatus.status) {
+        // Check for rig-level changes
+        if (!previous) {
           changes.push({
-            agent: agentName,
-            previous: previous || null,
-            current: hookStatus
+            type: 'rig:added',
+            rig: rigName,
+            data: newRigData
           });
+        } else {
+          // Check for agent changes within the rig
+          for (const [agentName, agentStatus] of Object.entries(newRigData.agents || {})) {
+            const prevAgent = previous.agents?.[agentName];
+
+            if (!prevAgent ||
+                prevAgent.beadId !== agentStatus.beadId ||
+                prevAgent.status !== agentStatus.status) {
+              changes.push({
+                type: 'agent:updated',
+                rig: rigName,
+                agent: agentName,
+                previous: prevAgent || null,
+                current: agentStatus
+              });
+            }
+          }
         }
 
-        state.hooks[agentName] = hookStatus;
+        state.rigs[rigName] = newRigData;
+      }
+
+      // Check for removed rigs
+      for (const rigName of Object.keys(state.rigs)) {
+        if (!rigData[rigName]) {
+          changes.push({
+            type: 'rig:removed',
+            rig: rigName
+          });
+          delete state.rigs[rigName];
+        }
       }
 
       state.lastUpdated = new Date().toISOString();
 
       // Only notify if there were changes
       if (changes.length > 0) {
-        notify('hooks:updated', {
-          hooks: state.hooks,
+        notify('rigs:updated', {
+          rigs: state.rigs,
           changes
         });
       }
