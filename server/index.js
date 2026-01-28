@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { createHookPoller } from './gt-poller.js';
 import { createStateManager } from './state.js';
 import { createMetricsCollector } from './metrics.js';
+import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,7 +78,7 @@ setInterval(() => {
 
 // WebSocket connection handling
 wss.on('connection', (ws) => {
-  console.log('Client connected');
+  logger.info('Client connected');
 
   // Send current state on connection
   const currentState = stateManager.getState();
@@ -98,12 +99,12 @@ wss.on('connection', (ws) => {
         stateManager.updateHooks(hooks);
       }
     } catch (error) {
-      console.error('WebSocket message error:', error);
+      logger.error({ err: error }, 'WebSocket message error');
     }
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected');
+    logger.info('Client disconnected');
   });
 });
 
@@ -169,9 +170,7 @@ app.get('*', (req, res) => {
 
 // Start server
 server.listen(PORT, () => {
-  console.log(`gtviz server running on http://localhost:${PORT}`);
-  console.log(`Monitoring rig: ${RIG_PATH}`);
-  console.log(`Poll interval: ${POLL_INTERVAL}ms`);
+  logger.info({ port: PORT, rigPath: RIG_PATH, pollInterval: POLL_INTERVAL }, 'gtviz server started');
 
   // Start polling
   hookPoller.start();
@@ -179,7 +178,7 @@ server.listen(PORT, () => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('Shutting down...');
+  logger.info('Shutting down');
   hookPoller.stop();
   wss.close();
   server.close();

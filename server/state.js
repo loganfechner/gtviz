@@ -5,6 +5,8 @@
  * Tracks agents, hooks, and notifies subscribers of changes.
  */
 
+import logger from './logger.js';
+
 /**
  * Create a state manager
  * @returns {Object} State manager
@@ -29,7 +31,7 @@ export function createStateManager() {
       try {
         subscriber(message);
       } catch (error) {
-        console.error('Subscriber error:', error);
+        logger.error({ err: error }, 'Subscriber error');
       }
     }
   };

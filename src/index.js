@@ -9,6 +9,12 @@
 
 import { StatusDetector, AgentStatus, getAllAgentStatus, getAllAgentStatusFlat } from './status-detector.js';
 import { createServer } from 'http';
+import pino from 'pino';
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  base: { service: 'gtviz-cli' }
+});
 
 // CLI mode when run directly
 const isMain = process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('gtviz');

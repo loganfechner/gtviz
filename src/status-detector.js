@@ -6,6 +6,12 @@
  */
 
 import { execFileSync } from 'child_process';
+import pino from 'pino';
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  base: { service: 'gtviz-detector' }
+});
 
 /**
  * Validate rig/polecat name to prevent injection
@@ -255,7 +261,7 @@ export class StatusDetector {
       try {
         listener(status, changes);
       } catch (error) {
-        console.error('Status listener error:', error);
+        logger.error({ err: error }, 'Status listener error');
       }
     }
   }
@@ -304,7 +310,7 @@ export class StatusDetector {
       this.lastStatus = newStatus;
       return { status: newStatus, changes };
     } catch (error) {
-      console.error('Status poll error:', error);
+      logger.error({ err: error }, 'Status poll error');
       return { status: this.lastStatus, changes: [], error };
     }
   }

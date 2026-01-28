@@ -10,6 +10,7 @@ import { promisify } from 'util';
 import { parseHookOutput, getHookSummary } from './hook-parser.js';
 import path from 'path';
 import fs from 'fs';
+import logger from './logger.js';
 
 const execAsync = promisify(exec);
 
@@ -136,7 +137,7 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
       const pollDuration = Math.round(performance.now() - startTime);
       onUpdate(hooks, pollDuration);
     } catch (error) {
-      console.error('Hook polling error:', error);
+      logger.error({ err: error }, 'Hook polling error');
     }
   };
 
