@@ -1,230 +1,140 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-  import HookStatusPanel from './components/HookStatusPanel.svelte';
-  import AgentCard from './components/AgentCard.svelte';
+  import { onMount } from 'svelte';
+  import NetworkGraph from './components/NetworkGraph.svelte';
+  import Sidebar from './components/Sidebar.svelte';
+  import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
 
-  let hooks = {};
-  let connected = false;
-  let ws = null;
-  let lastUpdated = null;
-
-  function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      connected = true;
-      console.log('WebSocket connected');
-    };
-
-    ws.onclose = () => {
-      connected = false;
-      console.log('WebSocket disconnected');
-      // Reconnect after 3 seconds
-      setTimeout(connectWebSocket, 3000);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        handleMessage(message);
-      } catch (error) {
-        console.error('Failed to parse message:', error);
-      }
-    };
-  }
-
-  function handleMessage(message) {
-    switch (message.type) {
-      case 'initial':
-        hooks = message.data.hooks || {};
-        lastUpdated = message.timestamp;
-        break;
-
-      case 'hooks:updated':
-        hooks = message.data.hooks || {};
-        lastUpdated = message.timestamp;
-        break;
-    }
-  }
-
-  function requestPoll() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'poll:now' }));
-    }
-  }
+  let selectedRig = null;
 
   onMount(() => {
-    connectWebSocket();
+    connectWebSocket((isConnected) => {
+      // Status now tracked via connectionStatus store
+    });
   });
 
-  onDestroy(() => {
-    if (ws) {
-      ws.close();
-    }
-  });
+  $: connected = $connectionStatus.connected;
+  $: statusText = connected
+    ? 'Live'
+    : $connectionStatus.reconnecting
+      ? `Reconnecting (${$connectionStatus.attempt})...`
+      : 'Connecting...';
 
-  $: agentList = Object.values(hooks).sort((a, b) => {
-    // Sort by role priority: witness, refinery, polecats
-    const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
-    const orderA = roleOrder[a.role] ?? 3;
-    const orderB = roleOrder[b.role] ?? 3;
-    if (orderA !== orderB) return orderA - orderB;
-    return a.agent.localeCompare(b.agent);
-  });
+  $: rigs = Object.keys($state.rigs || {});
+  $: if (rigs.length && !selectedRig) selectedRig = rigs[0];
+  $: currentAgents = selectedRig ? ($state.agents?.[selectedRig] || []) : [];
+  $: currentBeads = selectedRig ? ($state.beads?.[selectedRig] || []) : [];
+  $: currentHooks = selectedRig ? ($state.hooks?.[selectedRig] || {}) : {};
 </script>
 
-<main>
+<div class="app">
   <header>
     <h1>gtviz</h1>
-    <div class="status">
-      <span class="indicator" class:connected></span>
-      {connected ? 'Connected' : 'Disconnected'}
+    <div class="rig-selector">
+      {#each rigs as rig}
+        <button
+          class:active={selectedRig === rig}
+          on:click={() => selectedRig = rig}
+        >
+          {rig}
+        </button>
+      {/each}
     </div>
-    <button on:click={requestPoll} disabled={!connected}>
-      Refresh
-    </button>
+    <div class="status" class:connected>
+      {statusText}
+    </div>
   </header>
 
-  <div class="layout">
-    <div class="main-area">
-      <h2>Agents</h2>
-      <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
-        {/each}
-
-        {#if agentList.length === 0}
-          <p class="empty">No agents discovered yet...</p>
-        {/if}
-      </div>
+  <main>
+    <div class="graph-container">
+      <NetworkGraph
+        agents={currentAgents}
+        mail={$state.mail || []}
+        rig={selectedRig}
+      />
     </div>
 
-    <aside class="sidebar">
-      <HookStatusPanel {hooks} {lastUpdated} />
-    </aside>
-  </div>
-</main>
+    <Sidebar
+      beads={currentBeads}
+      hooks={currentHooks}
+      events={$events}
+      rig={selectedRig}
+    />
+  </main>
+</div>
 
 <style>
-  :global(*) {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #1a1a2e;
-    color: #eee;
-    min-height: 100vh;
-  }
-
-  main {
+  .app {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    background: #0d1117;
   }
 
   header {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 2rem;
-    background: #16213e;
-    border-bottom: 1px solid #0f3460;
+    padding: 12px 20px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    gap: 20px;
   }
 
   h1 {
-    font-size: 1.5rem;
-    color: #e94560;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+    font-size: 18px;
+    font-weight: 600;
+    color: #58a6ff;
+    margin: 0;
+  }
+
+  .rig-selector {
+    display: flex;
+    gap: 8px;
+  }
+
+  .rig-selector button {
+    padding: 6px 12px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+
+  .rig-selector button:hover {
+    background: #30363d;
+  }
+
+  .rig-selector button.active {
+    background: #238636;
+    border-color: #238636;
+    color: white;
   }
 
   .status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     margin-left: auto;
-    font-size: 0.875rem;
-    color: #888;
+    padding: 4px 10px;
+    background: #f8514966;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #f85149;
   }
 
-  .indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #666;
+  .status.connected {
+    background: #23863666;
+    color: #3fb950;
   }
 
-  .indicator.connected {
-    background: #4ade80;
-    box-shadow: 0 0 8px #4ade80;
-  }
-
-  button {
-    padding: 0.5rem 1rem;
-    background: #0f3460;
-    border: 1px solid #e94560;
-    color: #e94560;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-  }
-
-  button:hover:not(:disabled) {
-    background: #e94560;
-    color: #fff;
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .layout {
+  main {
     display: flex;
     flex: 1;
     overflow: hidden;
   }
 
-  .main-area {
+  .graph-container {
     flex: 1;
-    padding: 2rem;
-    overflow-y: auto;
-  }
-
-  h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-    color: #e94560;
-  }
-
-  .agent-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-  }
-
-  .sidebar {
-    width: 350px;
-    background: #16213e;
-    border-left: 1px solid #0f3460;
-    overflow-y: auto;
-  }
-
-  .empty {
-    color: #666;
-    font-style: italic;
-    padding: 2rem;
-    text-align: center;
+    position: relative;
+    overflow: hidden;
   }
 </style>
