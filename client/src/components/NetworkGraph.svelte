@@ -1,5 +1,5 @@
 <script>
-  import { onMount, afterUpdate, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, afterUpdate, createEventDispatcher } from 'svelte';
   import * as d3 from 'd3';
   import AgentCard from './AgentCard.svelte';
 
@@ -119,6 +119,19 @@
     resizeObserver.observe(container);
 
     return () => resizeObserver.disconnect();
+  });
+
+  // Cleanup on component destroy to prevent memory leaks
+  onDestroy(() => {
+    // Remove any lingering window event listeners
+    window.removeEventListener('mousemove', onDrag);
+    window.removeEventListener('mouseup', endDrag);
+
+    // Stop the D3 simulation
+    if (simulation) {
+      simulation.stop();
+      simulation = null;
+    }
   });
 
   function initSimulation() {
