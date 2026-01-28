@@ -6,6 +6,7 @@ import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
 import { LogsWatcher } from './logs-watcher.js';
+import { createAnomalyDetector } from './anomaly-detector.js';
 import logger from './logger.js';
 
 const app = express();
@@ -14,9 +15,39 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 const state = new StateManager();
 const metrics = createMetricsCollector(60);
+const anomalyDetector = createAnomalyDetector({
+  evaluationIntervalMs: 5000,
+  alertCooldownMs: 60000
+});
 const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
+
+// Connect anomaly detector to state
+anomalyDetector.on('alert', (alert) => {
+  state.addAlert(alert);
+  // Broadcast alert to all clients
+  const message = JSON.stringify({ type: 'alert', alert });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+anomalyDetector.on('alertUpdated', (alert) => {
+  state.updateAlert(alert.id, alert);
+  const message = JSON.stringify({ type: 'alertUpdated', alert });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+anomalyDetector.on('alertDismissed', (alert) => {
+  state.removeAlert(alert.id);
+  const message = JSON.stringify({ type: 'alertDismissed', alertId: alert.id });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
 
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
@@ -51,15 +82,23 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Broadcast metrics every 5 seconds
+// Broadcast metrics every 5 seconds and feed to anomaly detector
 setInterval(() => {
   const metricsData = metrics.getMetrics();
   state.updateMetrics(metricsData);
+  anomalyDetector.processMetrics(metricsData);
   const message = JSON.stringify({ type: 'metrics', data: metricsData });
   wss.clients.forEach(client => {
     if (client.readyState === 1) client.send(message);
   });
 }, 5000);
+
+// Feed log events to anomaly detector
+state.on('event', (event) => {
+  if (event.type === 'log' && event.level === 'error') {
+    anomalyDetector.processLogEntry(event);
+  }
+});
 
 // REST API for initial data
 app.get('/api/state', (req, res) => {
@@ -139,6 +178,47 @@ app.get('/api/events/export', (req, res) => {
   }
 });
 
+// Alert management API
+app.get('/api/alerts', (req, res) => {
+  res.json(anomalyDetector.getAlerts());
+});
+
+app.post('/api/alerts/:id/acknowledge', express.json(), (req, res) => {
+  const success = anomalyDetector.acknowledgeAlert(req.params.id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Alert not found' });
+  }
+});
+
+app.post('/api/alerts/:id/resolve', express.json(), (req, res) => {
+  const success = anomalyDetector.resolveAlert(req.params.id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Alert not found' });
+  }
+});
+
+app.delete('/api/alerts/:id', (req, res) => {
+  const success = anomalyDetector.dismissAlert(req.params.id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Alert not found' });
+  }
+});
+
+app.get('/api/alerts/thresholds', (req, res) => {
+  res.json(anomalyDetector.getThresholds());
+});
+
+app.put('/api/alerts/thresholds', express.json(), (req, res) => {
+  anomalyDetector.updateThresholds(req.body);
+  res.json(anomalyDetector.getThresholds());
+});
+
 const PORT = process.env.PORT || 3001;
 
 server.on('error', (err) => {
@@ -155,4 +235,5 @@ server.listen(PORT, () => {
   gtPoller.start();
   fileWatcher.start();
   logsWatcher.start();
+  anomalyDetector.start();
 });

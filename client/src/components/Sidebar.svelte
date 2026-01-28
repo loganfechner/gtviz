@@ -6,6 +6,7 @@
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
+  import AlertsPanel from './AlertsPanel.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -18,6 +19,7 @@
   export let hasInitialData = false;
   export let logs = [];
   export let agentStats = {};
+  export let alerts = [];
 
   const dispatch = createEventDispatcher();
 
@@ -26,6 +28,9 @@
   $: currentAgentHistory = selectedAgent
     ? (agentHistory[`${rig}/${selectedAgent.name}`] || [])
     : [];
+
+  $: unacknowledgedAlertCount = alerts.filter(a => !a.acknowledged && !a.resolved).length;
+  $: criticalAlertCount = alerts.filter(a => a.severity === 'critical' && !a.resolved).length;
 
   function handleMailClick(e) {
     dispatch('mailclick', e.detail);
@@ -56,6 +61,14 @@
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
+    <button class:active={activeTab === 'alerts'} on:click={() => activeTab = 'alerts'}
+            class:has-critical={criticalAlertCount > 0}
+            class:has-alerts={unacknowledgedAlertCount > 0}>
+      Alerts
+      {#if unacknowledgedAlertCount > 0}
+        <span class="badge" class:critical={criticalAlertCount > 0}>{unacknowledgedAlertCount}</span>
+      {/if}
+    </button>
   </nav>
 
   <div class="content">
@@ -71,6 +84,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'alerts'}
+      <AlertsPanel {alerts} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
@@ -109,6 +124,33 @@
   .tabs button.active {
     color: #58a6ff;
     border-bottom-color: #58a6ff;
+  }
+
+  .tabs button.has-alerts {
+    color: #d29922;
+  }
+
+  .tabs button.has-critical {
+    color: #f85149;
+  }
+
+  .tabs button .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: #d29922;
+    color: #161b22;
+    border-radius: 8px;
+  }
+
+  .tabs button .badge.critical {
+    background: #f85149;
   }
 
   .content {
