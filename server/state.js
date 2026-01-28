@@ -1,4 +1,11 @@
 import { EventEmitter } from 'events';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { homedir } from 'os';
+
+const GT_DIR = process.env.GT_DIR || join(homedir(), 'gt');
+const STATE_DIR = join(GT_DIR, '.gtviz');
+const STATE_FILE = join(STATE_DIR, 'state.json');
 
 export class StateManager extends EventEmitter {
   constructor() {
@@ -18,6 +25,62 @@ export class StateManager extends EventEmitter {
     };
     this.previousStatus = {};  // For detecting agent status changes
     this.previousBeadStatus = {};  // For detecting bead status changes
+  }
+
+  /**
+   * Save current state to disk for persistence across restarts
+   */
+  saveState() {
+    try {
+      if (!existsSync(STATE_DIR)) {
+        mkdirSync(STATE_DIR, { recursive: true });
+      }
+      const snapshot = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        state: this.state,
+        previousStatus: this.previousStatus,
+        previousBeadStatus: this.previousBeadStatus
+      };
+      writeFileSync(STATE_FILE, JSON.stringify(snapshot, null, 2));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /**
+   * Load state from disk if available
+   * Returns true if state was restored, false otherwise
+   */
+  loadState() {
+    try {
+      if (!existsSync(STATE_FILE)) {
+        return false;
+      }
+      const data = readFileSync(STATE_FILE, 'utf-8');
+      const snapshot = JSON.parse(data);
+
+      if (snapshot.version !== 1) {
+        return false;
+      }
+
+      // Restore state
+      this.state = snapshot.state;
+      this.previousStatus = snapshot.previousStatus || {};
+      this.previousBeadStatus = snapshot.previousBeadStatus || {};
+
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /**
+   * Get the path to the state file (for logging)
+   */
+  static getStatePath() {
+    return STATE_FILE;
   }
 
   getState() {

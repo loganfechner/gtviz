@@ -18,6 +18,85 @@ const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
 
+// Track intervals for cleanup
+let metricsInterval = null;
+let isShuttingDown = false;
+
+/**
+ * Graceful shutdown handler
+ * Saves state, closes watchers, and terminates cleanly
+ */
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    logger.info('shutdown', 'Shutdown already in progress');
+    return;
+  }
+  isShuttingDown = true;
+
+  logger.info('shutdown', `Received ${signal}, starting graceful shutdown`);
+
+  // Stop accepting new connections
+  server.close(() => {
+    logger.info('shutdown', 'HTTP server closed');
+  });
+
+  // Stop polling and watchers
+  gtPoller.stop();
+  logger.info('shutdown', 'GtPoller stopped');
+
+  fileWatcher.stop();
+  logger.info('shutdown', 'FileWatcher stopped');
+
+  logsWatcher.stop();
+  logger.info('shutdown', 'LogsWatcher stopped');
+
+  // Clear metrics broadcast interval
+  if (metricsInterval) {
+    clearInterval(metricsInterval);
+    metricsInterval = null;
+    logger.info('shutdown', 'Metrics interval cleared');
+  }
+
+  // Close all WebSocket connections gracefully
+  const closePromises = [];
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({ type: 'shutdown', message: 'Server shutting down' }));
+      closePromises.push(new Promise(resolve => {
+        client.close(1001, 'Server shutting down');
+        client.on('close', resolve);
+        setTimeout(resolve, 1000); // Don't wait more than 1s per client
+      }));
+    }
+  });
+
+  if (closePromises.length > 0) {
+    await Promise.all(closePromises);
+    logger.info('shutdown', `Closed ${closePromises.length} WebSocket connections`);
+  }
+
+  // Close WebSocket server
+  wss.close(() => {
+    logger.info('shutdown', 'WebSocket server closed');
+  });
+
+  // Save state to disk
+  const saved = state.saveState();
+  if (saved) {
+    logger.info('shutdown', 'State persisted to disk', { path: StateManager.getStatePath() });
+  } else {
+    logger.warn('shutdown', 'Failed to persist state');
+  }
+
+  logger.info('shutdown', 'Graceful shutdown complete');
+  process.exit(0);
+}
+
+// Register signal handlers for graceful shutdown
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
   const message = JSON.stringify({ type: 'state', data });
@@ -52,7 +131,7 @@ wss.on('connection', (ws) => {
 });
 
 // Broadcast metrics every 5 seconds
-setInterval(() => {
+metricsInterval = setInterval(() => {
   const metricsData = metrics.getMetrics();
   state.updateMetrics(metricsData);
   const message = JSON.stringify({ type: 'metrics', data: metricsData });
@@ -151,6 +230,12 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, () => {
+  // Restore state from disk if available
+  const restored = state.loadState();
+  if (restored) {
+    logger.info('server', 'State restored from disk', { path: StateManager.getStatePath() });
+  }
+
   logger.info('server', 'gtviz server started', { port: PORT, url: `http://localhost:${PORT}` });
   gtPoller.start();
   fileWatcher.start();
