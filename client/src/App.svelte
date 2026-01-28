@@ -2,11 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import NetworkGraph from './components/NetworkGraph.svelte';
 
   let hooks = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+  let viewMode = 'graph'; // 'graph' or 'grid'
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -90,20 +92,43 @@
     <button on:click={requestPoll} disabled={!connected}>
       Refresh
     </button>
+    <div class="view-toggle">
+      <button
+        class:active={viewMode === 'graph'}
+        on:click={() => viewMode = 'graph'}
+      >
+        Graph
+      </button>
+      <button
+        class:active={viewMode === 'grid'}
+        on:click={() => viewMode = 'grid'}
+      >
+        Grid
+      </button>
+    </div>
   </header>
 
   <div class="layout">
     <div class="main-area">
-      <h2>Agents</h2>
-      <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
-        {/each}
-
+      {#if viewMode === 'graph'}
+        <div class="graph-container">
+          <NetworkGraph agents={agentList} />
+        </div>
         {#if agentList.length === 0}
-          <p class="empty">No agents discovered yet...</p>
+          <p class="empty overlay">No agents discovered yet...</p>
         {/if}
-      </div>
+      {:else}
+        <h2>Agents</h2>
+        <div class="agent-grid">
+          {#each agentList as agent (agent.agent)}
+            <AgentCard {agent} />
+          {/each}
+
+          {#if agentList.length === 0}
+            <p class="empty">No agents discovered yet...</p>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <aside class="sidebar">
@@ -200,6 +225,12 @@
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
+    position: relative;
+  }
+
+  .main-area:has(.graph-container) {
+    padding: 1rem;
+    overflow: hidden;
   }
 
   h2 {
@@ -226,5 +257,42 @@
     font-style: italic;
     padding: 2rem;
     text-align: center;
+  }
+
+  .empty.overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 0;
+    margin-left: 1rem;
+  }
+
+  .view-toggle button {
+    border-radius: 0;
+    border-right: none;
+  }
+
+  .view-toggle button:first-child {
+    border-radius: 4px 0 0 4px;
+  }
+
+  .view-toggle button:last-child {
+    border-radius: 0 4px 4px 0;
+    border-right: 1px solid #e94560;
+  }
+
+  .view-toggle button.active {
+    background: #e94560;
+    color: #fff;
+  }
+
+  .graph-container {
+    height: calc(100vh - 120px);
+    position: relative;
   }
 </style>
