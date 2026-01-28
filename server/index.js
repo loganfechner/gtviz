@@ -7,13 +7,14 @@ import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
 import { LogsWatcher } from './logs-watcher.js';
 import logger from './logger.js';
+import { METRICS_HISTORY_SIZE, METRICS_BROADCAST_MS } from './constants.js';
 
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 const state = new StateManager();
-const metrics = createMetricsCollector(60);
+const metrics = createMetricsCollector(METRICS_HISTORY_SIZE);
 const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
@@ -138,7 +139,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Broadcast metrics every 5 seconds
+// Broadcast metrics periodically
 metricsInterval = setInterval(() => {
   const metricsData = metrics.getMetrics();
   state.updateMetrics(metricsData);
@@ -146,7 +147,7 @@ metricsInterval = setInterval(() => {
   wss.clients.forEach(client => {
     if (client.readyState === 1) client.send(message);
   });
-}, 5000);
+}, METRICS_BROADCAST_MS);
 
 // REST API for initial data
 app.get('/api/state', (req, res) => {

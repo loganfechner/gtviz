@@ -29,12 +29,14 @@
  * @property {function(): void} reset - Reset all metrics
  */
 
+import { METRICS_HISTORY_SIZE, METRICS_INTERVAL_MS } from './constants.js';
+
 /**
  * Create a metrics collector
  * @param {number} [historySize=60] - Number of data points to retain (default: 60 for 1 hour at 1/min)
  * @returns {MetricsCollector} Metrics collector instance
  */
-export function createMetricsCollector(historySize = 60) {
+export function createMetricsCollector(historySize = METRICS_HISTORY_SIZE) {
   // Circular buffers for historical data
   const pollDurations = [];      // ms per poll
   const eventVolume = [];        // events per interval
@@ -43,7 +45,6 @@ export function createMetricsCollector(historySize = 60) {
   // Current interval counters
   let currentIntervalEvents = 0;
   let lastIntervalTime = Date.now();
-  const INTERVAL_MS = 60000;     // 1 minute intervals for historical data
 
   // Real-time metrics
   let lastPollDuration = 0;
@@ -82,7 +83,7 @@ export function createMetricsCollector(historySize = 60) {
    */
   function maybeRotateInterval() {
     const now = Date.now();
-    if (now - lastIntervalTime >= INTERVAL_MS) {
+    if (now - lastIntervalTime >= METRICS_INTERVAL_MS) {
       addToBuffer(eventVolume, currentIntervalEvents);
       addToBuffer(timestamps, new Date().toISOString());
       currentIntervalEvents = 0;
