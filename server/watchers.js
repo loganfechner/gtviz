@@ -121,18 +121,29 @@ export class FileWatcher {
     if (eventType === 'add') {
       try {
         const content = readFileSync(filePath, 'utf-8');
-        const firstLine = content.split('\n')[0];
+        const lines = content.split('\n');
+        const firstLine = lines[0];
+        const subject = this.extractSubjectFromContent(content);
 
         this.state.addMail({
           rig,
           to: agent,
           from: this.extractSenderFromPath(filePath),
+          subject: subject,
           preview: firstLine.slice(0, 100),
+          content: content,
           path: filePath,
           timestamp: new Date().toISOString()
         });
       } catch {}
     }
+  }
+
+  extractSubjectFromContent(content) {
+    const subjectMatch = content.match(/^Subject:\s*(.+)$/m);
+    if (subjectMatch) return subjectMatch[1].trim();
+    const firstLine = content.split('\n')[0];
+    return firstLine.slice(0, 50) || 'No subject';
   }
 
   handleBeadsFile(filePath) {

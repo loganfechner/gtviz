@@ -1,10 +1,18 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
+
   export let events = [];
   export let rig = null;
+
+  const dispatch = createEventDispatcher();
 
   $: filteredEvents = rig
     ? events.filter(e => !e.source || e.source === rig)
     : events;
+
+  function handleMailClick(event) {
+    dispatch('mailclick', event);
+  }
 
   function formatTime(timestamp) {
     if (!timestamp) return '';
@@ -53,12 +61,14 @@
               <span class="event-time">{formatTime(event.timestamp)}</span>
             </div>
             {#if event.type === 'mail'}
-              <div class="event-detail">
-                {event.from} → {event.to}
-              </div>
-              {#if event.preview}
-                <div class="event-preview">{event.preview}</div>
-              {/if}
+              <button class="mail-link" on:click={() => handleMailClick(event)}>
+                <div class="event-detail">
+                  {event.from} → {event.to}
+                </div>
+                {#if event.preview}
+                  <div class="event-preview">{event.preview}</div>
+                {/if}
+              </button>
             {:else if event.message}
               <div class="event-detail">{event.message}</div>
             {:else if event.action}
@@ -157,5 +167,25 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .mail-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+
+  .mail-link:hover {
+    background: #21262d;
+  }
+
+  .mail-link:hover .event-preview {
+    background: #30363d;
   }
 </style>

@@ -1,4 +1,5 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
   import BeadsList from './BeadsList.svelte';
   import EventLog from './EventLog.svelte';
   import HookStatus from './HookStatus.svelte';
@@ -14,11 +15,17 @@
   export let selectedAgent = null;
   export let metrics = {};
 
+  const dispatch = createEventDispatcher();
+
   let activeTab = 'events';
 
   $: currentAgentHistory = selectedAgent
     ? (agentHistory[`${rig}/${selectedAgent.name}`] || [])
     : [];
+
+  function handleMailClick(e) {
+    dispatch('mailclick', e.detail);
+  }
 </script>
 
 <aside class="sidebar">
@@ -42,7 +49,7 @@
 
   <div class="content">
     {#if activeTab === 'events'}
-      <EventLog {events} {rig} />
+      <EventLog {events} {rig} on:mailclick={handleMailClick} />
     {:else if activeTab === 'beads'}
       <BeadsList {beads} />
     {:else if activeTab === 'hooks'}

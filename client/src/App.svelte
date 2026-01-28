@@ -4,9 +4,11 @@
   import Sidebar from './components/Sidebar.svelte';
   import FilterBar from './components/FilterBar.svelte';
   import Toast from './components/Toast.svelte';
+  import MailModal from './components/MailModal.svelte';
   import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
 
   let selectedRig = null;
+  let selectedMail = null;
 
   onMount(() => {
     connectWebSocket((isConnected) => {
@@ -91,6 +93,14 @@
   function handleFilter(e) {
     filters = e.detail;
   }
+
+  function handleMailClick(e) {
+    selectedMail = e.detail;
+  }
+
+  function closeMailModal() {
+    selectedMail = null;
+  }
 </script>
 
 <div class="app">
@@ -136,8 +146,15 @@
       {agentHistory}
       {selectedAgent}
       {metrics}
+      on:mailclick={handleMailClick}
     />
   </main>
+
+  <MailModal
+    mail={selectedMail}
+    allMail={$state.mail || []}
+    on:close={closeMailModal}
+  />
   <Toast />
 </div>
 
