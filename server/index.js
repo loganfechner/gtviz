@@ -127,6 +127,14 @@ state.on('error', (error) => {
   });
 });
 
+// Broadcast error pattern updates to all clients
+state.on('errorPatterns', (errorPatterns) => {
+  const message = JSON.stringify({ type: 'errorPatterns', data: errorPatterns });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
 wss.on('connection', (ws) => {
   logger.info('websocket', 'Client connected');
   metrics.recordWsConnection();
@@ -161,6 +169,10 @@ app.get('/api/state', (req, res) => {
 
 app.get('/api/rigs', (req, res) => {
   res.json(state.getRigs());
+});
+
+app.get('/api/error-patterns', (req, res) => {
+  res.json(state.getErrorPatterns());
 });
 
 // Export events as JSON or CSV

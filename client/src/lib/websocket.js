@@ -12,13 +12,17 @@ export const state = writable({
   beads: {},
   hooks: {},
   mail: [],
-  errors: []
+  errors: [],
+  errorPatterns: { patterns: [], summary: {} }
 });
 
 export const events = writable([]);
 
 // Separate errors store for UI components that only care about errors
 export const errors = writable([]);
+
+// Separate error patterns store for the ErrorPatternsPanel
+export const errorPatterns = writable({ patterns: [], summary: {} });
 
 // Connection status store for UI display
 export const connectionStatus = writable({
@@ -106,6 +110,10 @@ export function connectWebSocket(onStatusChange) {
           if (msg.data.errors) {
             errors.set(msg.data.errors);
           }
+          // Sync error patterns store with state
+          if (msg.data.errorPatterns) {
+            errorPatterns.set(msg.data.errorPatterns);
+          }
           connectionStatus.update(s => ({
             ...s,
             lastUpdateTime: now,
@@ -148,6 +156,16 @@ export function connectWebSocket(onStatusChange) {
           state.update(s => ({
             ...s,
             metrics: msg.data
+          }));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
+        } else if (msg.type === 'errorPatterns') {
+          errorPatterns.set(msg.data);
+          state.update(s => ({
+            ...s,
+            errorPatterns: msg.data
           }));
           connectionStatus.update(s => ({
             ...s,
