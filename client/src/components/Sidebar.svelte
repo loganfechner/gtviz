@@ -10,6 +10,7 @@
   import BeadLifecycleWaterfall from './BeadLifecycleWaterfall.svelte';
   import DependencyGraph from './DependencyGraph.svelte';
   import AlertsPanel from './AlertsPanel.svelte';
+  import AgentComparisonDashboard from './AgentComparisonDashboard.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -92,6 +93,9 @@
         <span class="badge" class:critical={criticalAlertCount > 0}>{unacknowledgedAlertCount}</span>
       {/if}
     </button>
+    <button class:active={activeTab === 'compare'} on:click={() => activeTab = 'compare'}>
+      Compare
+    </button>
   </nav>
 
   <div class="content" class:graph-content={activeTab === 'deps'}>
@@ -115,6 +119,8 @@
       <ErrorPanel {errors} loading={!hasInitialData} />
     {:else if activeTab === 'alerts'}
       <AlertsPanel {alerts} loading={!hasInitialData} />
+    {:else if activeTab === 'compare'}
+      <AgentComparisonDashboard {agents} {agentStats} {agentHistory} {rig} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
@@ -136,12 +142,12 @@
 
   .tabs button {
     flex: 1;
-    padding: 12px 8px;
+    padding: 12px 4px;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: #8b949e;
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     transition: all 0.15s;
   }
