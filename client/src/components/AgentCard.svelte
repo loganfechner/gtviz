@@ -1,8 +1,9 @@
 <script>
   export let agent;
 
-  $: statusClass = agent.status || 'idle';
+  $: statusClass = agent.dying ? 'dying' : (agent.status || 'idle');
   $: roleIcon = getRoleIcon(agent.role);
+  $: isSpawning = agent.spawning || false;
 
   function getRoleIcon(role) {
     switch (role) {
@@ -20,7 +21,7 @@
   }
 </script>
 
-<div class="card" class:active={statusClass === 'active'} class:hooked={statusClass === 'hooked'} class:error={statusClass === 'error'}>
+<div class="card" class:active={statusClass === 'active'} class:hooked={statusClass === 'hooked'} class:error={statusClass === 'error'} class:dying={statusClass === 'dying'} class:spawning={isSpawning}>
   <div class="header">
     <span class="role-icon">{roleIcon}</span>
     <span class="name">{agent.agent}</span>
@@ -86,6 +87,28 @@
 
   .card.error {
     border-color: #ef4444;
+  }
+
+  .card.dying {
+    border-color: #6b7280;
+    background: linear-gradient(135deg, #1f2544 0%, #2d1f1f 100%);
+    animation: deathPulse 0.5s ease-out;
+  }
+
+  .card.spawning {
+    border-color: #9333ea;
+    box-shadow: 0 0 20px rgba(147, 51, 234, 0.4);
+    animation: spawnGlow 0.6s ease-out;
+  }
+
+  @keyframes deathPulse {
+    0% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+    100% { border-color: #6b7280; box-shadow: none; }
+  }
+
+  @keyframes spawnGlow {
+    0% { box-shadow: 0 0 40px rgba(147, 51, 234, 0.8); }
+    100% { box-shadow: 0 0 20px rgba(147, 51, 234, 0.4); }
   }
 
   .header {

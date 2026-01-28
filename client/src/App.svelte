@@ -1,12 +1,21 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { fade, scale, fly } from 'svelte/transition';
+  import { elasticOut, cubicOut } from 'svelte/easing';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import PolecatSpawnEffect from './components/PolecatSpawnEffect.svelte';
 
   let hooks = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+
+  // Track newly spawned polecats for special effect
+  let spawningPolecats = new Set();
+  // Track agents being removed for death animation
+  let dyingAgents = new Map(); // agentName -> agent data
+  let previousAgentNames = new Set();
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -43,15 +52,57 @@
   function handleMessage(message) {
     switch (message.type) {
       case 'initial':
-        hooks = message.data.hooks || {};
+        handleHooksUpdate(message.data.hooks || {}, true);
         lastUpdated = message.timestamp;
         break;
 
       case 'hooks:updated':
-        hooks = message.data.hooks || {};
+        handleHooksUpdate(message.data.hooks || {}, false);
         lastUpdated = message.timestamp;
         break;
     }
+  }
+
+  function handleHooksUpdate(newHooks, isInitial) {
+    const newAgentNames = new Set(Object.keys(newHooks));
+
+    // Detect newly added agents
+    if (!isInitial) {
+      for (const agentName of newAgentNames) {
+        if (!previousAgentNames.has(agentName)) {
+          const agent = newHooks[agentName];
+          // Trigger polecat spawn effect
+          if (agent.role === 'polecat') {
+            spawningPolecats.add(agentName);
+            spawningPolecats = spawningPolecats; // Trigger reactivity
+            // Clear spawn effect after animation completes
+            setTimeout(() => {
+              spawningPolecats.delete(agentName);
+              spawningPolecats = spawningPolecats;
+            }, 1200);
+          }
+        }
+      }
+
+      // Detect removed agents - trigger death animation
+      for (const agentName of previousAgentNames) {
+        if (!newAgentNames.has(agentName)) {
+          const agent = hooks[agentName];
+          if (agent) {
+            dyingAgents.set(agentName, { ...agent, dying: true });
+            dyingAgents = dyingAgents; // Trigger reactivity
+            // Remove after death animation completes
+            setTimeout(() => {
+              dyingAgents.delete(agentName);
+              dyingAgents = dyingAgents;
+            }, 600);
+          }
+        }
+      }
+    }
+
+    previousAgentNames = newAgentNames;
+    hooks = newHooks;
   }
 
   function requestPoll() {
@@ -78,6 +129,55 @@
     if (orderA !== orderB) return orderA - orderB;
     return a.agent.localeCompare(b.agent);
   });
+
+  // Combine live agents with dying agents for display
+  $: displayAgents = [
+    ...agentList.map(a => ({ ...a, dying: false, spawning: spawningPolecats.has(a.agent) })),
+    ...Array.from(dyingAgents.values())
+  ];
+
+  // Custom transition for agent spawn
+  function spawnIn(node, { duration = 400, delay = 0, isPolecat = false }) {
+    if (isPolecat) {
+      // Polecats get a more dramatic entrance
+      return {
+        delay,
+        duration: 600,
+        css: (t) => {
+          const eased = elasticOut(t);
+          return `
+            opacity: ${t};
+            transform: scale(${0.3 + eased * 0.7}) rotate(${(1 - t) * 10}deg);
+            filter: brightness(${1 + (1 - t) * 0.5});
+          `;
+        }
+      };
+    }
+    // Standard agents get fade + scale
+    return {
+      delay,
+      duration,
+      css: (t) => {
+        const eased = cubicOut(t);
+        return `
+          opacity: ${t};
+          transform: scale(${0.8 + eased * 0.2});
+        `;
+      }
+    };
+  }
+
+  // Death animation
+  function deathOut(node, { duration = 500 }) {
+    return {
+      duration,
+      css: (t) => `
+        opacity: ${t};
+        transform: scale(${0.8 + t * 0.2}) translateY(${(1 - t) * 20}px);
+        filter: grayscale(${(1 - t) * 100}%) brightness(${0.5 + t * 0.5});
+      `
+    };
+  }
 </script>
 
 <main>
@@ -96,11 +196,21 @@
     <div class="main-area">
       <h2>Agents</h2>
       <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
+        {#each displayAgents as agent (agent.agent)}
+          <div
+            class="agent-wrapper"
+            class:spawning={agent.spawning}
+            in:spawnIn={{ isPolecat: agent.role === 'polecat' }}
+            out:deathOut
+          >
+            <AgentCard {agent} />
+            {#if agent.spawning && agent.role === 'polecat'}
+              <PolecatSpawnEffect />
+            {/if}
+          </div>
         {/each}
 
-        {#if agentList.length === 0}
+        {#if displayAgents.length === 0}
           <p class="empty">No agents discovered yet...</p>
         {/if}
       </div>
@@ -226,5 +336,13 @@
     font-style: italic;
     padding: 2rem;
     text-align: center;
+  }
+
+  .agent-wrapper {
+    position: relative;
+  }
+
+  .agent-wrapper.spawning {
+    z-index: 10;
   }
 </style>
