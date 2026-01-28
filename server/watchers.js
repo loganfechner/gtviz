@@ -1,6 +1,7 @@
 import chokidar from 'chokidar';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import logger from './logger.js';
 
 export class FileWatcher {
   constructor(state) {
@@ -35,9 +36,18 @@ export class FileWatcher {
 
     watcher.on('add', path => this.handleFile(path, 'add'));
     watcher.on('change', path => this.handleFile(path, 'change'));
+    watcher.on('error', err => {
+      logger.error('watcher', 'File watcher error', { error: err.message });
+      this.state.addError({
+        component: 'watcher',
+        operation: 'watch',
+        severity: 'error',
+        message: `File watcher error: ${err.message}`
+      });
+    });
 
     this.watchers.push(watcher);
-    console.log('File watcher started');
+    logger.info('watcher', 'File watcher started');
   }
 
   stop() {
@@ -83,7 +93,14 @@ export class FileWatcher {
 
       this.lastEventLines[filePath] = lines.length;
     } catch (err) {
-      console.error('Error reading events file:', err.message);
+      logger.warn('watcher', 'Error reading events file', { path: filePath, error: err.message });
+      this.state.addError({
+        component: 'watcher',
+        operation: 'readEventsFile',
+        severity: 'warning',
+        message: `Failed to read events file: ${err.message}`,
+        path: filePath
+      });
     }
   }
 
@@ -110,7 +127,14 @@ export class FileWatcher {
 
       this.lastEventLines[filePath] = lines.length;
     } catch (err) {
-      console.error('Error reading feed file:', err.message);
+      logger.warn('watcher', 'Error reading feed file', { path: filePath, error: err.message });
+      this.state.addError({
+        component: 'watcher',
+        operation: 'readFeedFile',
+        severity: 'warning',
+        message: `Failed to read feed file: ${err.message}`,
+        path: filePath
+      });
     }
   }
 
