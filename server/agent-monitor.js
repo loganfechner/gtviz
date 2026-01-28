@@ -1,9 +1,29 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-import { stat } from 'fs/promises';
+import { stat, readdir } from 'fs/promises';
 import { join } from 'path';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Escape string for use in shell commands (prevents injection)
+ */
+function escapeShell(str) {
+  if (typeof str !== 'string') return '';
+  // Only allow alphanumeric, dash, underscore, slash, dot
+  if (!/^[a-zA-Z0-9_\-./]+$/.test(str)) {
+    return str.replace(/[^a-zA-Z0-9_\-./]/g, '');
+  }
+  return str;
+}
+
+/**
+ * Validate agent/rig name - must be safe identifier
+ */
+function isValidName(name) {
+  return typeof name === 'string' && /^[a-zA-Z0-9_\-]+$/.test(name);
+}
 
 /**
  * Safe exec with timeout - returns empty string on failure
@@ -11,6 +31,18 @@ const execAsync = promisify(exec);
 async function safeExec(cmd, options = {}) {
   try {
     const { stdout } = await execAsync(cmd, { timeout: 5000, ...options });
+    return stdout;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Safe execFile with timeout - returns empty string on failure
+ */
+async function safeExecFile(cmd, args, options = {}) {
+  try {
+    const { stdout } = await execFileAsync(cmd, args, { timeout: 5000, ...options });
     return stdout;
   } catch {
     return '';
@@ -78,18 +110,27 @@ export class AgentMonitor {
    * Check for running claude process associated with agent
    */
   async checkForProcess(rig, agentName, role) {
-    // Use ps + grep instead of pgrep (better with special chars)
-    // Gas Town claude processes have patterns like:
-    // "[GAS TOWN] mayor" or "[GAS TOWN] gtviz/refinery"
+    // Validate inputs to prevent injection
+    if (!isValidName(rig) || !isValidName(agentName)) {
+      return false;
+    }
+
+    // Get process list safely using execFile
+    const psOutput = await safeExecFile('ps', ['aux']);
+    if (!psOutput) return false;
+
+    // Search for Gas Town patterns in output (safe string matching, no shell)
+    const lines = psOutput.split('\n');
     const patterns = [
-      `GAS TOWN.*${rig}/${agentName}`,    // [GAS TOWN] gtviz/refinery
-      `GAS TOWN.*${agentName} <-`,         // [GAS TOWN] mayor <- human
-      `GAS TOWN.*${agentName}`,            // [GAS TOWN] deacon
+      `GAS TOWN] ${rig}/${agentName}`,    // [GAS TOWN] gtviz/refinery
+      `GAS TOWN] ${agentName} <-`,         // [GAS TOWN] mayor <- human
+      `GAS TOWN] ${agentName}`,            // [GAS TOWN] deacon
     ];
 
-    for (const pattern of patterns) {
-      const stdout = await safeExec(`ps aux | grep -E "${pattern}" | grep -v grep | head -1`);
-      if (stdout.trim()) return true;
+    for (const line of lines) {
+      for (const pattern of patterns) {
+        if (line.includes(pattern)) return true;
+      }
     }
 
     return false;
@@ -99,19 +140,22 @@ export class AgentMonitor {
    * Check if agent has an active tmux session
    */
   async checkTmuxSession(rig, agentName, role) {
-    // Gas Town tmux session naming patterns:
-    // gt-{rig}-{agent} (e.g., gt-gtviz-refinery)
-    // hq-{agent} (e.g., hq-mayor, hq-deacon)
-    // {rig}-{agent}
+    // Validate inputs to prevent injection
+    if (!isValidName(rig) || !isValidName(agentName)) {
+      return false;
+    }
+
+    // Use execFile for safe tmux call
+    const stdout = await safeExecFile('tmux', ['list-sessions', '-F', '#{session_name}']);
+    const sessions = stdout.split('\n').filter(s => s.trim()).map(s => s.toLowerCase());
+
+    // Gas Town tmux session naming patterns (safe string comparison)
     const sessionPatterns = [
       `gt-${rig}-${agentName}`,    // gt-gtviz-refinery
       `hq-${agentName}`,            // hq-mayor, hq-deacon
       `${rig}-${agentName}`,        // gtviz-refinery
       `${agentName}`,               // just the agent name
     ];
-
-    const stdout = await safeExec('tmux list-sessions -F "#{session_name}" 2>/dev/null || true');
-    const sessions = stdout.split('\n').filter(s => s.trim()).map(s => s.toLowerCase());
 
     for (const pattern of sessionPatterns) {
       if (sessions.includes(pattern.toLowerCase())) {
@@ -140,11 +184,17 @@ export class AgentMonitor {
       if (now - feedStat.mtimeMs < this.idleThresholdMs) return true;
     } catch {}
 
-    // Check mail directory for recent files (use safeExec with short timeout)
-    const mailCheck = await safeExec(
-      `find "${join(agentPath, 'mail')}" -type f -mmin -1 2>/dev/null | head -1`
-    );
-    if (mailCheck.trim()) return true;
+    // Check mail directory for recent files using fs instead of shell find
+    try {
+      const mailPath = join(agentPath, 'mail');
+      const files = await readdir(mailPath, { withFileTypes: true });
+      for (const file of files) {
+        if (file.isFile()) {
+          const fileStat = await stat(join(mailPath, file.name));
+          if (now - fileStat.mtimeMs < 60000) return true; // 1 minute
+        }
+      }
+    } catch {}
 
     // Check session.json for recent updates
     try {
