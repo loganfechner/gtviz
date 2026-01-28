@@ -131,8 +131,10 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
     if (!isRunning) return;
 
     try {
+      const startTime = performance.now();
       const hooks = await pollAllAgentHooks(rigPath);
-      onUpdate(hooks);
+      const pollDuration = Math.round(performance.now() - startTime);
+      onUpdate(hooks, pollDuration);
     } catch (error) {
       console.error('Hook polling error:', error);
     }

@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
+  import MetricsPanel from './components/MetricsPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
   import NetworkGraph from './components/NetworkGraph.svelte';
 
@@ -10,6 +11,7 @@
   let lastUpdated = null;
   let viewMode = 'graph'; // 'graph' or 'grid'
   let theme = 'dark';
+  let metrics = {};
 
   function getSystemTheme() {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -74,12 +76,17 @@
     switch (message.type) {
       case 'initial':
         hooks = message.data.hooks || {};
+        metrics = message.data.metrics || {};
         lastUpdated = message.timestamp;
         break;
 
       case 'hooks:updated':
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
+        break;
+
+      case 'metrics:update':
+        metrics = message.data || {};
         break;
     }
   }
@@ -176,6 +183,7 @@
 
     <aside class="sidebar">
       <HookStatusPanel {hooks} {lastUpdated} />
+      <MetricsPanel {metrics} />
     </aside>
   </div>
 </main>
