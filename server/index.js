@@ -143,15 +143,51 @@ app.post('/api/poll', async (req, res) => {
   }
 });
 
+// Health check response builder
+function buildHealthResponse() {
+  const pollerStatus = hookPoller.getStatus();
+  const isHealthy = pollerStatus.isRunning && !pollerStatus.lastPollError;
+
+  return {
+    status: isHealthy ? 'healthy' : 'degraded',
+    timestamp: new Date().toISOString(),
+
+    // Server configuration
+    config: {
+      rigPath: RIG_PATH,
+      pollInterval: POLL_INTERVAL
+    },
+
+    // WebSocket connectivity status
+    websocket: {
+      status: 'running',
+      connectedClients: wss.clients.size
+    },
+
+    // Poller status with last poll time
+    poller: {
+      status: pollerStatus.isRunning ? 'running' : 'stopped',
+      lastPollTime: pollerStatus.lastPollTime,
+      lastPollError: pollerStatus.lastPollError,
+      intervalMs: pollerStatus.intervalMs
+    },
+
+    // Database status (this system uses in-memory state, no database)
+    database: {
+      status: 'not_applicable',
+      message: 'This system uses in-memory state management'
+    }
+  };
+}
+
 // API: Health check
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    rigPath: RIG_PATH,
-    pollInterval: POLL_INTERVAL,
-    connectedClients: wss.clients.size,
-    timestamp: new Date().toISOString()
-  });
+  res.json(buildHealthResponse());
+});
+
+// Convenience endpoint at /health (in addition to /api/health)
+app.get('/health', (req, res) => {
+  res.json(buildHealthResponse());
 });
 
 // API: Get metrics

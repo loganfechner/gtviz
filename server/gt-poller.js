@@ -126,6 +126,8 @@ export async function pollAllAgentHooks(rigPath) {
 export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
   let intervalId = null;
   let isRunning = false;
+  let lastPollTime = null;
+  let lastPollError = null;
 
   const poll = async () => {
     if (!isRunning) return;
@@ -134,8 +136,11 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
       const startTime = performance.now();
       const hooks = await pollAllAgentHooks(rigPath);
       const pollDuration = Math.round(performance.now() - startTime);
+      lastPollTime = new Date().toISOString();
+      lastPollError = null;
       onUpdate(hooks, pollDuration);
     } catch (error) {
+      lastPollError = error.message;
       console.error('Hook polling error:', error);
     }
   };
@@ -158,6 +163,15 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
 
     async pollNow() {
       return pollAllAgentHooks(rigPath);
+    },
+
+    getStatus() {
+      return {
+        isRunning,
+        lastPollTime,
+        lastPollError,
+        intervalMs
+      };
     }
   };
 }
