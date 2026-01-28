@@ -321,6 +321,70 @@
  */
 
 // =============================================================================
+// Task Replay Types
+// =============================================================================
+
+/**
+ * Task replay status values
+ * @typedef {'pending'|'queued'|'running'|'completed'|'failed'|'skipped'} ReplayTaskStatus
+ */
+
+/**
+ * Replay job status values
+ * @typedef {'pending'|'running'|'completed'|'failed'|'cancelled'} ReplayJobStatus
+ */
+
+/**
+ * Completed task record for export
+ * @typedef {Object} CompletedTask
+ * @property {string} beadId - Original bead ID
+ * @property {string} title - Task title
+ * @property {string} agent - Agent that completed the task
+ * @property {string} rig - Rig where task was completed
+ * @property {string} completedAt - ISO timestamp of completion
+ * @property {number|null} duration - Duration in milliseconds
+ * @property {string|null} description - Task description (if available)
+ * @property {string|null} type - Task type (task, bug, feature, etc.)
+ * @property {string|null} priority - Task priority
+ */
+
+/**
+ * Task within a replay job
+ * @typedef {Object} ReplayTask
+ * @property {string} beadId - Original bead ID
+ * @property {string} title - Task title
+ * @property {string} originalAgent - Agent that originally completed this
+ * @property {string|null} targetAgent - Target agent for replay (null = auto-assign)
+ * @property {ReplayTaskStatus} status - Current status
+ * @property {string|null} replayBeadId - New bead ID created for replay
+ * @property {string|null} error - Error message if failed
+ * @property {string|null} startedAt - ISO timestamp when started
+ * @property {string|null} completedAt - ISO timestamp when completed
+ */
+
+/**
+ * Replay job options
+ * @typedef {Object} ReplayJobOptions
+ * @property {boolean} createNewBeads - Whether to create new beads for replay
+ * @property {boolean} sequential - Run tasks sequentially vs parallel
+ * @property {string|null} targetRig - Target rig for replay (null = same rig)
+ * @property {string|null} targetAgent - Target agent for replay (null = auto)
+ */
+
+/**
+ * Replay job for re-running completed tasks
+ * @typedef {Object} ReplayJob
+ * @property {string} id - Unique job ID
+ * @property {string} name - Job name/description
+ * @property {ReplayTask[]} tasks - Tasks to replay
+ * @property {ReplayJobStatus} status - Current job status
+ * @property {string} createdAt - ISO timestamp
+ * @property {string|null} startedAt - ISO timestamp when started
+ * @property {string|null} completedAt - ISO timestamp when completed
+ * @property {ReplayJobOptions} options - Replay options
+ */
+
+// =============================================================================
 // Configuration Types
 // =============================================================================
 
