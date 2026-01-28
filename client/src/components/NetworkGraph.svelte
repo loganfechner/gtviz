@@ -1,367 +1,447 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, afterUpdate, createEventDispatcher } from 'svelte';
   import * as d3 from 'd3';
+  import AgentCard from './AgentCard.svelte';
+
+  const dispatch = createEventDispatcher();
 
   export let agents = [];
+  export let mail = [];
+  export let rig = null;
 
   let container;
-  let svg;
+  let svgElement;
   let simulation;
   let width = 800;
   let height = 600;
 
+  // Track animated edges
+  let animatedEdges = [];
+
   // Position cache to maintain node positions between updates
   const positionCache = new Map();
 
-  // Role colors
-  const roleColors = {
-    witness: '#e94560',
-    refinery: '#fbbf24',
-    polecat: '#4ade80',
-    mayor: '#60a5fa'
-  };
+  // Track if initial layout has settled
+  let layoutSettled = false;
 
-  // Status colors for glow effects
-  const statusGlow = {
-    active: '#4ade80',
-    hooked: '#fbbf24',
-    error: '#ef4444',
-    idle: 'transparent'
-  };
-
-  function getNodeRadius(role) {
+  // Get fixed position for role-based nodes
+  function getFixedPosition(role, w, h) {
     switch (role) {
-      case 'witness': return 35;
-      case 'refinery': return 30;
-      case 'mayor': return 35;
-      default: return 25;
+      case 'mayor':
+        return { fx: w / 2, fy: 80 };
+      case 'witness':
+        return { fx: 100, fy: h / 2 };
+      case 'refinery':
+        return { fx: w - 100, fy: h / 2 };
+      default:
+        return { fx: null, fy: null };
     }
   }
 
-  function getRoleIcon(role) {
-    switch (role) {
-      case 'witness': return '\uD83D\uDC41'; // 👁
-      case 'refinery': return '\uD83C\uDFED'; // 🏭
-      case 'polecat': return '\uD83D\uDC3E'; // 🐾
-      case 'mayor': return '\uD83D\uDC51'; // 👑
-      default: return '\uD83D\uDD27'; // 🔧
-    }
-  }
+  $: nodes = agents.map(a => {
+    const cached = positionCache.get(a.name);
+    const fixed = getFixedPosition(a.role, width, height);
+    return {
+      id: a.name,
+      ...a,
+      // Use cached position if available, otherwise use fixed or let simulation decide
+      x: cached?.x ?? (fixed.fx ?? width / 2),
+      y: cached?.y ?? (fixed.fy ?? height / 2),
+      fx: fixed.fx,
+      fy: fixed.fy
+    };
+  });
 
-  function createSimulation(nodes) {
-    return d3.forceSimulation(nodes)
-      // Low alpha decay for smoother, slower movement
-      .alphaDecay(0.02)
-      // Higher velocity decay to prevent overshoot and bouncing
-      .velocityDecay(0.4)
-      // Center force - gentle pull toward center
-      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
-      // Collision detection with padding
-      .force('collide', d3.forceCollide().radius(d => getNodeRadius(d.role) + 15).strength(0.8))
-      // Reduced charge strength to prevent excessive repulsion
-      .force('charge', d3.forceManyBody()
-        .strength(-150)
-        .distanceMin(50)
-        .distanceMax(300))
-      // Link force for connected nodes (future: for showing relationships)
-      .force('y', d3.forceY().y(d => {
-        // Layered layout: witness at top, refinery below, polecats in middle
-        if (d.role === 'witness') return 80;
-        if (d.role === 'refinery') return 150;
-        if (d.role === 'mayor') return 80;
-        return height / 2;
-      }).strength(d => {
-        if (d.role === 'witness' || d.role === 'mayor') return 0.3;
-        if (d.role === 'refinery') return 0.2;
-        return 0.05;
-      }))
-      .force('x', d3.forceX().x(d => {
-        // Refinery on the right
-        if (d.role === 'refinery') return width - 100;
-        // Witness and mayor in center-left area
-        if (d.role === 'witness') return width / 2;
-        if (d.role === 'mayor') return 150;
-        return width / 2;
-      }).strength(d => {
-        if (d.role === 'refinery') return 0.3;
-        if (d.role === 'witness' || d.role === 'mayor') return 0.2;
-        return 0.02;
-      }));
-  }
+  $: links = buildLinks(agents, mail);
 
-  function initGraph() {
-    if (!container) return;
+  function buildLinks(agents, mail) {
+    const links = [];
+    const agentNames = new Set(agents.map(a => a.name));
 
-    const rect = container.getBoundingClientRect();
-    width = rect.width || 800;
-    height = rect.height || 600;
-
-    // Clear existing
-    d3.select(container).selectAll('*').remove();
-
-    svg = d3.select(container)
-      .append('svg')
-      .attr('width', '100%')
-      .attr('height', '100%')
-      .attr('viewBox', `0 0 ${width} ${height}`);
-
-    // Add defs for glow filters
-    const defs = svg.append('defs');
-
-    // Create glow filters for each status
-    Object.entries(statusGlow).forEach(([status, color]) => {
-      if (color === 'transparent') return;
-
-      const filter = defs.append('filter')
-        .attr('id', `glow-${status}`)
-        .attr('x', '-50%')
-        .attr('y', '-50%')
-        .attr('width', '200%')
-        .attr('height', '200%');
-
-      filter.append('feGaussianBlur')
-        .attr('stdDeviation', '4')
-        .attr('result', 'coloredBlur');
-
-      const feMerge = filter.append('feMerge');
-      feMerge.append('feMergeNode').attr('in', 'coloredBlur');
-      feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
-    });
-
-    // Group for nodes
-    svg.append('g').attr('class', 'nodes');
-
-    updateGraph();
-  }
-
-  function updateGraph() {
-    if (!svg) return;
-
-    // Convert agents to nodes, preserving cached positions
-    const nodes = agents.map(agent => {
-      const cached = positionCache.get(agent.agent);
-      const node = {
-        id: agent.agent,
-        ...agent,
-        x: cached?.x ?? width / 2 + (Math.random() - 0.5) * 100,
-        y: cached?.y ?? height / 2 + (Math.random() - 0.5) * 100,
-        vx: cached?.vx ?? 0,
-        vy: cached?.vy ?? 0
-      };
-
-      // Apply fixed positions for certain roles
-      if (agent.role === 'witness') {
-        node.fy = 80;
-      }
-      if (agent.role === 'mayor') {
-        node.fx = 150;
-        node.fy = 80;
-      }
-
-      return node;
-    });
-
-    // Stop existing simulation
-    if (simulation) {
-      simulation.stop();
-    }
-
-    // Create new simulation
-    simulation = createSimulation(nodes);
-
-    // Update positions on tick
-    simulation.on('tick', () => {
-      updateNodePositions();
-
-      // Cache positions
-      nodes.forEach(node => {
-        positionCache.set(node.id, {
-          x: node.x,
-          y: node.y,
-          vx: node.vx,
-          vy: node.vy
+    // Build links from recent mail
+    for (const m of mail.slice(0, 20)) {
+      if (m.rig === rig && agentNames.has(m.to) && agentNames.has(m.from)) {
+        links.push({
+          source: m.from,
+          target: m.to,
+          timestamp: m.timestamp
         });
-      });
-    });
-
-    // Freeze simulation after layout settles (low alpha)
-    simulation.on('end', () => {
-      // Simulation has stabilized
-    });
-
-    // Render nodes
-    renderNodes(nodes);
-
-    // Reheat simulation gently for updates
-    if (positionCache.size > 0) {
-      simulation.alpha(0.1).restart();
-    } else {
-      simulation.alpha(0.5).restart();
-    }
-  }
-
-  function renderNodes(nodes) {
-    const nodeGroup = svg.select('.nodes');
-
-    // Data join
-    const nodeElements = nodeGroup
-      .selectAll('.node')
-      .data(nodes, d => d.id);
-
-    // Exit
-    nodeElements.exit()
-      .transition()
-      .duration(200)
-      .attr('opacity', 0)
-      .remove();
-
-    // Enter
-    const nodeEnter = nodeElements.enter()
-      .append('g')
-      .attr('class', 'node')
-      .attr('opacity', 0)
-      .call(drag());
-
-    // Circle background
-    nodeEnter.append('circle')
-      .attr('class', 'node-bg')
-      .attr('r', d => getNodeRadius(d.role))
-      .attr('fill', d => roleColors[d.role] || '#666')
-      .attr('stroke', '#1a1a2e')
-      .attr('stroke-width', 3);
-
-    // Icon
-    nodeEnter.append('text')
-      .attr('class', 'node-icon')
-      .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'central')
-      .attr('font-size', d => getNodeRadius(d.role) * 0.8)
-      .text(d => getRoleIcon(d.role));
-
-    // Label below
-    nodeEnter.append('text')
-      .attr('class', 'node-label')
-      .attr('text-anchor', 'middle')
-      .attr('y', d => getNodeRadius(d.role) + 15)
-      .attr('fill', '#ccc')
-      .attr('font-size', '11px')
-      .attr('font-family', 'system-ui, sans-serif')
-      .text(d => d.agent);
-
-    // Fade in
-    nodeEnter.transition()
-      .duration(300)
-      .attr('opacity', 1);
-
-    // Update all (merge enter + update)
-    const allNodes = nodeEnter.merge(nodeElements);
-
-    // Update circle appearance based on status
-    allNodes.select('.node-bg')
-      .transition()
-      .duration(200)
-      .attr('r', d => getNodeRadius(d.role))
-      .attr('fill', d => roleColors[d.role] || '#666')
-      .attr('filter', d => {
-        const status = d.status || 'idle';
-        return statusGlow[status] !== 'transparent' ? `url(#glow-${status})` : null;
-      });
-
-    // Update label
-    allNodes.select('.node-label')
-      .text(d => d.agent);
-  }
-
-  function updateNodePositions() {
-    svg.select('.nodes')
-      .selectAll('.node')
-      .attr('transform', d => `translate(${d.x}, ${d.y})`);
-  }
-
-  function drag() {
-    return d3.drag()
-      .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.1).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        // Keep fixed positions for certain roles
-        if (d.role !== 'witness' && d.role !== 'mayor') {
-          d.fx = null;
-        }
-        if (d.role !== 'witness' && d.role !== 'mayor') {
-          d.fy = null;
-        }
-      });
-  }
-
-  function handleResize() {
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    width = rect.width || 800;
-    height = rect.height || 600;
-
-    if (svg) {
-      svg.attr('viewBox', `0 0 ${width} ${height}`);
-      // Update force centers
-      if (simulation) {
-        simulation.force('center', d3.forceCenter(width / 2, height / 2).strength(0.05));
-        simulation.alpha(0.1).restart();
       }
     }
+
+    // Add structural links (witness monitors everyone, refinery connects to mayor)
+    const witnessAgent = agents.find(a => a.role === 'witness');
+    const refineryAgent = agents.find(a => a.role === 'refinery');
+    const mayorAgent = agents.find(a => a.role === 'mayor');
+
+    if (witnessAgent) {
+      for (const a of agents) {
+        if (a.name !== witnessAgent.name) {
+          links.push({
+            source: witnessAgent.name,
+            target: a.name,
+            structural: true
+          });
+        }
+      }
+    }
+
+    if (refineryAgent && mayorAgent) {
+      links.push({
+        source: refineryAgent.name,
+        target: mayorAgent.name,
+        structural: true
+      });
+    }
+
+    return links;
   }
 
   onMount(() => {
-    initGraph();
-    window.addEventListener('resize', handleResize);
+    const rect = container.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+
+    initSimulation();
+
+    const resizeObserver = new ResizeObserver(() => {
+      const rect = container.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      if (simulation) {
+        simulation.force('center', d3.forceCenter(width / 2, height / 2));
+        // Only gently restart on resize if layout has settled
+        if (layoutSettled) {
+          simulation.alpha(0.1).restart();
+        }
+      }
+    });
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
   });
 
-  onDestroy(() => {
+  function initSimulation() {
+    simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(180).strength(0.3))
+      .force('charge', d3.forceManyBody().strength(-150))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(90))
+      // Slower decay for smoother movement
+      .alphaDecay(0.05)
+      .velocityDecay(0.4)
+      .on('tick', () => {
+        // Cache positions for stability between updates
+        for (const node of nodes) {
+          if (node.x !== undefined && node.y !== undefined) {
+            positionCache.set(node.id, { x: node.x, y: node.y });
+          }
+        }
+        nodes = [...nodes];
+        links = [...links];
+      })
+      .on('end', () => {
+        layoutSettled = true;
+      });
+  }
+
+  // Track previous agent count to detect changes
+  let prevAgentCount = 0;
+
+  afterUpdate(() => {
     if (simulation) {
-      simulation.stop();
+      const agentCountChanged = agents.length !== prevAgentCount;
+      prevAgentCount = agents.length;
+
+      simulation.nodes(nodes);
+      simulation.force('link').links(links);
+
+      // Only restart with significant alpha if agents changed
+      // Otherwise use very low alpha for minimal adjustment
+      if (agentCountChanged && !layoutSettled) {
+        simulation.alpha(0.3).restart();
+      } else if (agentCountChanged) {
+        // New agent added after layout settled - gentle adjustment
+        simulation.alpha(0.1).restart();
+      }
+      // Don't restart for other updates (mail, etc.) - positions stay stable
     }
-    window.removeEventListener('resize', handleResize);
   });
 
-  // React to agent changes
-  $: if (svg && agents) {
-    updateGraph();
+  // Drag behavior for manual positioning
+  function handleDragStart(event, node) {
+    if (!event.active) simulation.alphaTarget(0.1).restart();
+    node.fx = node.x;
+    node.fy = node.y;
+  }
+
+  function handleDrag(event, node) {
+    node.fx = event.x;
+    node.fy = event.y;
+  }
+
+  function handleDragEnd(event, node) {
+    if (!event.active) simulation.alphaTarget(0);
+    // Keep position fixed after drag for non-fixed-role nodes
+    // Users can manually position nodes and they'll stay put
+    const fixed = getFixedPosition(node.role, width, height);
+    if (fixed.fx === null) {
+      // Not a fixed-role node, but keep the dragged position
+      node.fx = event.x;
+      node.fy = event.y;
+      positionCache.set(node.id, { x: event.x, y: event.y });
+    }
+  }
+
+  // Simple drag implementation for Svelte
+  let dragNode = null;
+  let dragOffset = { x: 0, y: 0 };
+
+  function startDrag(e, node) {
+    // Only allow dragging non-fixed-role nodes
+    const fixed = getFixedPosition(node.role, width, height);
+    if (fixed.fx !== null) return;
+
+    e.preventDefault();
+    dragNode = node;
+    const rect = container.getBoundingClientRect();
+    dragOffset = {
+      x: e.clientX - rect.left - (node.x || width / 2),
+      y: e.clientY - rect.top - (node.y || height / 2)
+    };
+
+    simulation.alphaTarget(0.1).restart();
+
+    window.addEventListener('mousemove', onDrag);
+    window.addEventListener('mouseup', endDrag);
+  }
+
+  function onDrag(e) {
+    if (!dragNode) return;
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left - dragOffset.x;
+    const y = e.clientY - rect.top - dragOffset.y;
+
+    dragNode.fx = x;
+    dragNode.fy = y;
+    dragNode.x = x;
+    dragNode.y = y;
+    positionCache.set(dragNode.id, { x, y });
+    nodes = [...nodes];
+  }
+
+  function endDrag() {
+    if (dragNode) {
+      simulation.alphaTarget(0);
+      dragNode = null;
+    }
+    window.removeEventListener('mousemove', onDrag);
+    window.removeEventListener('mouseup', endDrag);
+  }
+
+  // Animate edge when new mail arrives
+  $: if (mail.length > 0) {
+    const latest = mail[0];
+    if (latest.rig === rig) {
+      animateEdge(latest.from, latest.to);
+    }
+  }
+
+  function animateEdge(from, to) {
+    const id = `${from}-${to}-${Date.now()}`;
+    animatedEdges = [...animatedEdges, { id, from, to }];
+
+    // Remove animation after it completes
+    setTimeout(() => {
+      animatedEdges = animatedEdges.filter(e => e.id !== id);
+    }, 1500);
+  }
+
+  function getNodePosition(name) {
+    const node = nodes.find(n => n.id === name);
+    return node ? { x: node.x || width/2, y: node.y || height/2 } : { x: width/2, y: height/2 };
+  }
+
+  function getRoleColor(role) {
+    const colors = {
+      mayor: '#f0883e',
+      witness: '#a371f7',
+      refinery: '#3fb950',
+      crew: '#58a6ff',
+      polecat: '#db61a2'
+    };
+    return colors[role] || '#8b949e';
   }
 </script>
 
-<div class="network-graph" bind:this={container}></div>
+<div class="graph" bind:this={container}>
+  <svg {width} {height}>
+    <defs>
+      <marker
+        id="arrowhead"
+        viewBox="0 0 10 10"
+        refX="25"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto"
+      >
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#30363d"/>
+      </marker>
+      <marker
+        id="arrowhead-active"
+        viewBox="0 0 10 10"
+        refX="25"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto"
+      >
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff"/>
+      </marker>
+    </defs>
+
+    <!-- Structural links (faded) -->
+    {#each links.filter(l => l.structural) as link}
+      {@const source = getNodePosition(link.source?.id || link.source)}
+      {@const target = getNodePosition(link.target?.id || link.target)}
+      <line
+        x1={source.x}
+        y1={source.y}
+        x2={target.x}
+        y2={target.y}
+        stroke="#21262d"
+        stroke-width="1"
+        stroke-dasharray="4,4"
+      />
+    {/each}
+
+    <!-- Active links -->
+    {#each links.filter(l => !l.structural) as link}
+      {@const source = getNodePosition(link.source?.id || link.source)}
+      {@const target = getNodePosition(link.target?.id || link.target)}
+      <line
+        x1={source.x}
+        y1={source.y}
+        x2={target.x}
+        y2={target.y}
+        stroke="#30363d"
+        stroke-width="2"
+        marker-end="url(#arrowhead)"
+      />
+    {/each}
+
+    <!-- Animated edges -->
+    {#each animatedEdges as edge (edge.id)}
+      {@const source = getNodePosition(edge.from)}
+      {@const target = getNodePosition(edge.to)}
+      <line
+        class="animated-edge"
+        x1={source.x}
+        y1={source.y}
+        x2={target.x}
+        y2={target.y}
+        stroke="#58a6ff"
+        stroke-width="3"
+        marker-end="url(#arrowhead-active)"
+      />
+      <circle
+        class="pulse"
+        cx={target.x}
+        cy={target.y}
+        r="20"
+        fill="none"
+        stroke="#58a6ff"
+      />
+    {/each}
+  </svg>
+
+  <!-- Agent cards overlaid on SVG -->
+  <div class="cards">
+    {#each nodes as node (node.id)}
+      <div
+        class="card-wrapper"
+        class:draggable={getFixedPosition(node.role, width, height).fx === null}
+        style="left: {(node.x || width/2) - 70}px; top: {(node.y || height/2) - 40}px;"
+        on:mousedown={(e) => startDrag(e, node)}
+        on:click={() => dispatch('select', node)}
+        role="button"
+        tabindex="0"
+      >
+        <AgentCard agent={node} color={getRoleColor(node.role)} />
+      </div>
+    {/each}
+  </div>
+</div>
 
 <style>
-  .network-graph {
+  .graph {
     width: 100%;
     height: 100%;
-    min-height: 400px;
-    background: radial-gradient(circle at center, #1f2544 0%, #1a1a2e 100%);
-    border-radius: 8px;
-    overflow: hidden;
+    position: relative;
+    background: radial-gradient(circle at center, #161b22 0%, #0d1117 100%);
   }
 
-  :global(.network-graph .node) {
+  svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .cards {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .card-wrapper {
+    position: absolute;
+    pointer-events: auto;
+    transition: left 0.15s ease-out, top 0.15s ease-out;
+    user-select: none;
+  }
+
+  .card-wrapper.draggable {
     cursor: grab;
   }
 
-  :global(.network-graph .node:active) {
+  .card-wrapper.draggable:active {
     cursor: grabbing;
+    transition: none;
   }
 
-  :global(.network-graph .node-icon) {
-    pointer-events: none;
-    user-select: none;
+  .animated-edge {
+    animation: pulse-line 1.5s ease-out forwards;
   }
 
-  :global(.network-graph .node-label) {
-    pointer-events: none;
-    user-select: none;
+  .pulse {
+    animation: pulse-ring 1.5s ease-out forwards;
+  }
+
+  @keyframes pulse-line {
+    0% {
+      stroke-opacity: 1;
+      stroke-width: 4;
+    }
+    100% {
+      stroke-opacity: 0;
+      stroke-width: 1;
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      r: 20;
+      stroke-opacity: 1;
+      stroke-width: 3;
+    }
+    100% {
+      r: 50;
+      stroke-opacity: 0;
+      stroke-width: 0;
+    }
   }
 </style>

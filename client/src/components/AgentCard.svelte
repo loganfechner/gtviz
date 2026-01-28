@@ -1,216 +1,135 @@
 <script>
   export let agent;
+  export let color = '#8b949e';
 
-  $: statusClass = agent.status || 'idle';
-  $: roleIcon = getRoleIcon(agent.role);
-
-  function getRoleIcon(role) {
-    switch (role) {
-      case 'witness': return '👁';
-      case 'refinery': return '🏭';
-      case 'polecat': return '🐾';
-      default: return '🔧';
+  function getStatusEmoji(status) {
+    switch (status) {
+      case 'running': return '';
+      case 'idle': return '';
+      case 'stopped': return '';
+      case 'killed': return '';
+      default: return '';
     }
   }
 
-  function formatBeadId(id) {
-    if (!id) return '';
-    // Truncate long IDs
-    return id.length > 12 ? id.slice(0, 12) + '...' : id;
+  function getStatusClass(status) {
+    switch (status) {
+      case 'running': return 'running';
+      case 'idle': return 'idle';
+      case 'stopped': return 'stopped';
+      case 'killed': return 'killed';
+      default: return 'unknown';
+    }
   }
 </script>
 
-<div class="card" class:active={statusClass === 'active'} class:hooked={statusClass === 'hooked'} class:error={statusClass === 'error'}>
+<div class="card" style="--accent: {color}">
   <div class="header">
-    <span class="role-icon">{roleIcon}</span>
-    <span class="name">{agent.agent}</span>
-    <span class="role-badge">{agent.role}</span>
+    <span class="role">{agent.role}</span>
+    <span class="status {getStatusClass(agent.status)}">{agent.status || 'unknown'}</span>
   </div>
-
-  <div class="content">
-    {#if agent.beadId}
-      <div class="hook-info">
-        <span class="hook-icon">🪝</span>
-        <div class="hook-details">
-          <span class="bead-id">{formatBeadId(agent.beadId)}</span>
-          <span class="bead-title">{agent.beadTitle || agent.label}</span>
-        </div>
-      </div>
-
-      {#if agent.moleculeId}
-        <div class="molecule-info">
-          <span class="molecule-icon">🧬</span>
-          <span class="molecule-id">{agent.moleculeId}</span>
-        </div>
-      {/if}
-    {:else if agent.status === 'error'}
-      <div class="error-info">
-        <span class="error-icon">⚠</span>
-        <span class="error-text">{agent.label || 'Error'}</span>
-      </div>
-    {:else}
-      <div class="idle-info">
-        <span class="idle-text">No work hooked</span>
-      </div>
-    {/if}
-  </div>
-
-  <div class="footer">
-    <span class="status-indicator" class:active={statusClass === 'active'}></span>
-    <span class="status-text">{statusClass}</span>
-  </div>
+  <div class="name">{agent.name}</div>
+  {#if agent.task}
+    <div class="task">{agent.task}</div>
+  {/if}
+  {#if agent.lastOutput}
+    <div class="output">{agent.lastOutput.slice(0, 50)}...</div>
+  {/if}
 </div>
 
 <style>
   .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-left: 3px solid var(--accent);
     border-radius: 8px;
-    padding: 1rem;
-    transition: all 0.2s;
+    padding: 10px 12px;
+    min-width: 140px;
+    max-width: 180px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
   }
 
   .card:hover {
-    border-color: var(--accent);
-    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.1);
-  }
-
-  .card.active {
-    border-color: var(--success);
-    box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
-  }
-
-  .card.hooked {
-    border-color: var(--warning);
-  }
-
-  .card.error {
-    border-color: var(--error);
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   }
 
   .header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 6px;
   }
 
-  .role-icon {
-    font-size: 1.25rem;
+  .role {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .status {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  .status.running {
+    background: #23863633;
+    color: #3fb950;
+  }
+
+  .status.idle {
+    background: #58a6ff22;
+    color: #58a6ff;
+  }
+
+  .status.stopped {
+    background: #f8514933;
+    color: #f85149;
+  }
+
+  .status.killed {
+    background: #f8514966;
+    color: #f85149;
+  }
+
+  .status.unknown {
+    background: #8b949e22;
+    color: #8b949e;
   }
 
   .name {
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .role-badge {
-    margin-left: auto;
-    font-size: 0.75rem;
-    padding: 0.125rem 0.5rem;
-    background: var(--border-color);
-    border-radius: 4px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .content {
-    min-height: 3rem;
-  }
-
-  .hook-info {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-start;
-  }
-
-  .hook-icon {
-    font-size: 1rem;
-    flex-shrink: 0;
-  }
-
-  .hook-details {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    overflow: hidden;
-  }
-
-  .bead-id {
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: var(--accent);
-  }
-
-  .bead-title {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: #e6edf3;
+    margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .molecule-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
+  .task {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .molecule-icon {
-    font-size: 0.875rem;
-  }
-
-  .molecule-id {
+  .output {
+    font-size: 10px;
+    color: #6e7681;
     font-family: monospace;
-  }
-
-  .error-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--error);
-  }
-
-  .idle-info {
-    color: var(--text-dim);
-    font-style: italic;
-  }
-
-  .footer {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .status-indicator {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-dim);
-  }
-
-  .status-indicator.active {
-    background: var(--success);
-    box-shadow: 0 0 6px var(--success);
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-
-  .status-text {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    margin-top: 4px;
+    padding: 4px 6px;
+    background: #0d1117;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

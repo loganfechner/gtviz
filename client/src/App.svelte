@@ -1,396 +1,171 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-  import HookStatusPanel from './components/HookStatusPanel.svelte';
-  import MetricsPanel from './components/MetricsPanel.svelte';
-  import AgentCard from './components/AgentCard.svelte';
+  import { onMount } from 'svelte';
   import NetworkGraph from './components/NetworkGraph.svelte';
+  import Sidebar from './components/Sidebar.svelte';
+  import FilterBar from './components/FilterBar.svelte';
+  import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
 
-  let hooks = {};
-  let connected = false;
-  let ws = null;
-  let lastUpdated = null;
-  let viewMode = 'graph'; // 'graph' or 'grid'
-  let theme = 'dark';
-  let metrics = {};
-
-  function getSystemTheme() {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    }
-    return 'dark';
-  }
-
-  function initTheme() {
-    const stored = localStorage.getItem('gtviz-theme');
-    if (stored === 'light' || stored === 'dark') {
-      theme = stored;
-    } else {
-      theme = getSystemTheme();
-    }
-    applyTheme(theme);
-  }
-
-  function applyTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-  }
-
-  function toggleTheme() {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('gtviz-theme', theme);
-    applyTheme(theme);
-  }
-
-  function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
-
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      connected = true;
-      console.log('WebSocket connected');
-    };
-
-    ws.onclose = () => {
-      connected = false;
-      console.log('WebSocket disconnected');
-      // Reconnect after 3 seconds
-      setTimeout(connectWebSocket, 3000);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        handleMessage(message);
-      } catch (error) {
-        console.error('Failed to parse message:', error);
-      }
-    };
-  }
-
-  function handleMessage(message) {
-    switch (message.type) {
-      case 'initial':
-        hooks = message.data.hooks || {};
-        metrics = message.data.metrics || {};
-        lastUpdated = message.timestamp;
-        break;
-
-      case 'hooks:updated':
-        hooks = message.data.hooks || {};
-        lastUpdated = message.timestamp;
-        break;
-
-      case 'metrics:update':
-        metrics = message.data || {};
-        break;
-    }
-  }
-
-  function requestPoll() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'poll:now' }));
-    }
-  }
+  let selectedRig = null;
 
   onMount(() => {
-    initTheme();
-    connectWebSocket();
-
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
-    const handleChange = (e) => {
-      if (!localStorage.getItem('gtviz-theme')) {
-        theme = e.matches ? 'light' : 'dark';
-        applyTheme(theme);
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    connectWebSocket((isConnected) => {
+      // Status now tracked via connectionStatus store
+    });
   });
 
-  onDestroy(() => {
-    if (ws) {
-      ws.close();
-    }
+  $: connected = $connectionStatus.connected;
+  $: statusText = connected
+    ? 'Live'
+    : $connectionStatus.reconnecting
+      ? `Reconnecting (${$connectionStatus.attempt})...`
+      : 'Connecting...';
+
+  let selectedAgent = null;
+  let filters = { search: '', status: 'all', role: 'all' };
+
+  $: rigs = Object.keys($state.rigs || {});
+  $: if (rigs.length && !selectedRig) selectedRig = rigs[0];
+  $: currentAgents = selectedRig ? ($state.agents?.[selectedRig] || []) : [];
+  $: currentBeads = selectedRig ? ($state.beads?.[selectedRig] || []) : [];
+  $: currentHooks = selectedRig ? ($state.hooks?.[selectedRig] || {}) : {};
+  $: agentHistory = $state.agentHistory || {};
+
+  // Apply filters to agents
+  $: filteredAgents = currentAgents.filter(agent => {
+    if (filters.search && !agent.name.toLowerCase().includes(filters.search)) return false;
+    if (filters.status !== 'all' && agent.status !== filters.status) return false;
+    if (filters.role !== 'all' && agent.role !== filters.role) return false;
+    return true;
   });
 
-  $: agentList = Object.values(hooks).sort((a, b) => {
-    // Sort by role priority: witness, refinery, polecats
-    const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
-    const orderA = roleOrder[a.role] ?? 3;
-    const orderB = roleOrder[b.role] ?? 3;
-    if (orderA !== orderB) return orderA - orderB;
-    return a.agent.localeCompare(b.agent);
-  });
+  function handleAgentSelect(agent) {
+    selectedAgent = agent;
+  }
+
+  function handleFilter(e) {
+    filters = e.detail;
+  }
 </script>
 
-<main>
+<div class="app">
   <header>
     <h1>gtviz</h1>
-    <div class="status">
-      <span class="indicator" class:connected></span>
-      {connected ? 'Connected' : 'Disconnected'}
+    <div class="rig-selector">
+      {#each rigs as rig}
+        <button
+          class:active={selectedRig === rig}
+          on:click={() => selectedRig = rig}
+        >
+          {rig}
+        </button>
+      {/each}
     </div>
-    <button on:click={requestPoll} disabled={!connected}>
-      Refresh
-    </button>
-    <div class="view-toggle">
-      <button
-        class:active={viewMode === 'graph'}
-        on:click={() => viewMode = 'graph'}
-      >
-        Graph
-      </button>
-      <button
-        class:active={viewMode === 'grid'}
-        on:click={() => viewMode = 'grid'}
-      >
-        Grid
-      </button>
+    <div class="status" class:connected>
+      {statusText}
     </div>
-    <button class="theme-toggle" on:click={toggleTheme} title="Toggle theme">
-      {theme === 'dark' ? '☀️' : '🌙'}
-    </button>
   </header>
 
-  <div class="layout">
-    <div class="main-area">
-      {#if viewMode === 'graph'}
-        <div class="graph-container">
-          <NetworkGraph agents={agentList} />
-        </div>
-        {#if agentList.length === 0}
-          <p class="empty overlay">No agents discovered yet...</p>
-        {/if}
-      {:else}
-        <h2>Agents</h2>
-        <div class="agent-grid">
-          {#each agentList as agent (agent.agent)}
-            <AgentCard {agent} />
-          {/each}
+  <FilterBar
+    agents={currentAgents}
+    {rigs}
+    on:filter={handleFilter}
+  />
 
-          {#if agentList.length === 0}
-            <p class="empty">No agents discovered yet...</p>
-          {/if}
-        </div>
-      {/if}
+  <main>
+    <div class="graph-container">
+      <NetworkGraph
+        agents={filteredAgents}
+        mail={$state.mail || []}
+        rig={selectedRig}
+        on:select={(e) => handleAgentSelect(e.detail)}
+      />
     </div>
 
-    <aside class="sidebar">
-      <HookStatusPanel {hooks} {lastUpdated} />
-      <MetricsPanel {metrics} />
-    </aside>
-  </div>
-</main>
+    <Sidebar
+      beads={currentBeads}
+      hooks={currentHooks}
+      events={$events}
+      rig={selectedRig}
+      agents={currentAgents}
+      {agentHistory}
+      {selectedAgent}
+    />
+  </main>
+</div>
 
 <style>
-  :global(:root) {
-    --bg-primary: #1a1a2e;
-    --bg-secondary: #16213e;
-    --bg-card: #1f2544;
-    --border-color: #0f3460;
-    --text-primary: #eee;
-    --text-secondary: #ccc;
-    --text-muted: #888;
-    --text-dim: #666;
-    --text-faint: #555;
-    --accent: #e94560;
-    --success: #4ade80;
-    --warning: #fbbf24;
-    --error: #ef4444;
-  }
-
-  :global([data-theme="light"]) {
-    --bg-primary: #f5f5f7;
-    --bg-secondary: #ffffff;
-    --bg-card: #ffffff;
-    --border-color: #d1d5db;
-    --text-primary: #1f2937;
-    --text-secondary: #374151;
-    --text-muted: #6b7280;
-    --text-dim: #9ca3af;
-    --text-faint: #d1d5db;
-    --accent: #dc2626;
-    --success: #16a34a;
-    --warning: #d97706;
-    --error: #dc2626;
-  }
-
-  :global(*) {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    min-height: 100vh;
-    transition: background-color 0.2s, color 0.2s;
-  }
-
-  main {
+  .app {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    background: #0d1117;
   }
 
   header {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 2rem;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s, border-color 0.2s;
+    padding: 12px 20px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    gap: 20px;
   }
 
   h1 {
-    font-size: 1.5rem;
-    color: var(--accent);
-    font-weight: 700;
-    letter-spacing: 0.05em;
+    font-size: 18px;
+    font-weight: 600;
+    color: #58a6ff;
+    margin: 0;
+  }
+
+  .rig-selector {
+    display: flex;
+    gap: 8px;
+  }
+
+  .rig-selector button {
+    padding: 6px 12px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+
+  .rig-selector button:hover {
+    background: #30363d;
+  }
+
+  .rig-selector button.active {
+    background: #238636;
+    border-color: #238636;
+    color: white;
   }
 
   .status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     margin-left: auto;
-    font-size: 0.875rem;
-    color: var(--text-muted);
+    padding: 4px 10px;
+    background: #f8514966;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #f85149;
   }
 
-  .indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-dim);
+  .status.connected {
+    background: #23863666;
+    color: #3fb950;
   }
 
-  .indicator.connected {
-    background: var(--success);
-    box-shadow: 0 0 8px var(--success);
-  }
-
-  button {
-    padding: 0.5rem 1rem;
-    background: var(--border-color);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-  }
-
-  button:hover:not(:disabled) {
-    background: var(--accent);
-    color: #fff;
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .theme-toggle {
-    padding: 0.5rem;
-    font-size: 1.25rem;
-    line-height: 1;
-    background: transparent;
-    border: 1px solid var(--border-color);
-  }
-
-  .theme-toggle:hover {
-    background: var(--border-color);
-  }
-
-  .layout {
+  main {
     display: flex;
     flex: 1;
     overflow: hidden;
-  }
-
-  .main-area {
-    flex: 1;
-    padding: 2rem;
-    overflow-y: auto;
-    position: relative;
-  }
-
-  .main-area:has(.graph-container) {
-    padding: 1rem;
-    overflow: hidden;
-  }
-
-  h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-    color: var(--accent);
-  }
-
-  .agent-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-  }
-
-  .sidebar {
-    width: 350px;
-    background: var(--bg-secondary);
-    border-left: 1px solid var(--border-color);
-    overflow-y: auto;
-    transition: background-color 0.2s, border-color 0.2s;
-  }
-
-  .empty {
-    color: var(--text-dim);
-    font-style: italic;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .empty.overlay {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-
-  .view-toggle {
-    display: flex;
-    gap: 0;
-    margin-left: 1rem;
-  }
-
-  .view-toggle button {
-    border-radius: 0;
-    border-right: none;
-  }
-
-  .view-toggle button:first-child {
-    border-radius: 4px 0 0 4px;
-  }
-
-  .view-toggle button:last-child {
-    border-radius: 0 4px 4px 0;
-    border-right: 1px solid #e94560;
-  }
-
-  .view-toggle button.active {
-    background: #e94560;
-    color: #fff;
   }
 
   .graph-container {
-    height: calc(100vh - 120px);
+    flex: 1;
     position: relative;
+    overflow: hidden;
   }
 </style>

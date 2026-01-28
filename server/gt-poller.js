@@ -1,163 +1,287 @@
-/**
- * GT Command Poller
- *
- * Periodically polls `gt hook` for each agent directory
- * to track hook status across the rig.
- */
-
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { parseHookOutput, getHookSummary } from './hook-parser.js';
-import path from 'path';
-import fs from 'fs';
+import { AgentMonitor } from './agent-monitor.js';
 
 const execAsync = promisify(exec);
 
-/**
- * Discover agent directories in a rig
- * @param {string} rigPath - Path to the rig directory
- * @returns {Promise<Array>} List of agent info objects
- */
-export async function discoverAgents(rigPath) {
-  const agents = [];
-
-  // Check for polecats directory
-  const polecatsDir = path.join(rigPath, 'polecats');
-  if (fs.existsSync(polecatsDir)) {
-    const polecatDirs = fs.readdirSync(polecatsDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => ({
-        name: d.name,
-        role: 'polecat',
-        path: path.join(polecatsDir, d.name)
-      }));
-    agents.push(...polecatDirs);
-  }
-
-  // Check for witness directory
-  const witnessDir = path.join(rigPath, 'witness');
-  if (fs.existsSync(witnessDir)) {
-    agents.push({
-      name: 'witness',
-      role: 'witness',
-      path: witnessDir
-    });
-  }
-
-  // Check for refinery directory
-  const refineryDir = path.join(rigPath, 'refinery');
-  if (fs.existsSync(refineryDir)) {
-    agents.push({
-      name: 'refinery',
-      role: 'refinery',
-      path: refineryDir
-    });
-  }
-
-  return agents;
-}
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 100,
+  maxDelayMs: 2000,
+  backoffMultiplier: 2
+};
 
 /**
- * Get hook status for a specific agent
- * @param {Object} agent - Agent info object
- * @returns {Promise<Object>} Hook status for the agent
+ * Execute with exponential backoff retry
  */
-export async function getAgentHookStatus(agent) {
-  try {
-    // Run gt hook in the agent's directory
-    const { stdout, stderr } = await execAsync('gt hook', {
-      cwd: agent.path,
-      timeout: 5000
-    });
+async function withRetry(fn, context = 'operation') {
+  let lastError;
+  let delay = RETRY_CONFIG.initialDelayMs;
 
-    const hookOutput = stdout || stderr;
-    const parsed = parseHookOutput(hookOutput);
-    const summary = getHookSummary(parsed);
-
-    return {
-      agent: agent.name,
-      role: agent.role,
-      path: agent.path,
-      ...summary,
-      raw: parsed,
-      lastUpdated: new Date().toISOString()
-    };
-  } catch (error) {
-    return {
-      agent: agent.name,
-      role: agent.role,
-      path: agent.path,
-      status: 'error',
-      label: error.message,
-      beadId: null,
-      beadTitle: null,
-      error: error.message,
-      lastUpdated: new Date().toISOString()
-    };
-  }
-}
-
-/**
- * Poll hook status for all agents in a rig
- * @param {string} rigPath - Path to the rig directory
- * @returns {Promise<Object>} Map of agent name to hook status
- */
-export async function pollAllAgentHooks(rigPath) {
-  const agents = await discoverAgents(rigPath);
-  const hookStatuses = {};
-
-  await Promise.all(
-    agents.map(async (agent) => {
-      const status = await getAgentHookStatus(agent);
-      hookStatuses[agent.name] = status;
-    })
-  );
-
-  return hookStatuses;
-}
-
-/**
- * Create a hook poller that updates state periodically
- * @param {string} rigPath - Path to the rig directory
- * @param {Function} onUpdate - Callback when hooks are updated
- * @param {number} intervalMs - Polling interval in milliseconds
- * @returns {Object} Poller control object
- */
-export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
-  let intervalId = null;
-  let isRunning = false;
-
-  const poll = async () => {
-    if (!isRunning) return;
-
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     try {
-      const startTime = performance.now();
-      const hooks = await pollAllAgentHooks(rigPath);
-      const pollDuration = Math.round(performance.now() - startTime);
-      onUpdate(hooks, pollDuration);
-    } catch (error) {
-      console.error('Hook polling error:', error);
-    }
-  };
-
-  return {
-    start() {
-      if (isRunning) return;
-      isRunning = true;
-      poll(); // Initial poll
-      intervalId = setInterval(poll, intervalMs);
-    },
-
-    stop() {
-      isRunning = false;
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * RETRY_CONFIG.backoffMultiplier, RETRY_CONFIG.maxDelayMs);
       }
-    },
-
-    async pollNow() {
-      return pollAllAgentHooks(rigPath);
     }
-  };
+  }
+  throw lastError;
+}
+
+export class GtPoller {
+  constructor(state) {
+    this.state = state;
+    this.interval = null;
+    this.pollIntervalMs = 5000;
+    this.agentMonitor = new AgentMonitor();
+    this.lastSuccessfulPoll = {};
+    this.failureCount = {};
+  }
+
+  start() {
+    this.poll();
+    this.interval = setInterval(() => this.poll(), this.pollIntervalMs);
+    console.log('GT poller started');
+  }
+
+  stop() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+
+  async poll() {
+    try {
+      await Promise.all([
+        this.pollRigs(),
+        this.pollAgents(),
+        this.pollBeads()
+      ]);
+    } catch (err) {
+      console.error('Poll error:', err.message);
+    }
+  }
+
+  async pollRigs() {
+    try {
+      const rigs = await withRetry(async () => {
+        const { stdout } = await execAsync('gt rig list --json 2>/dev/null || gt rig list', { timeout: 10000 });
+        return this.parseRigList(stdout);
+      }, 'pollRigs');
+
+      this.state.updateRigs(rigs);
+      this.lastSuccessfulPoll.rigs = Date.now();
+      this.failureCount.rigs = 0;
+    } catch (err) {
+      this.failureCount.rigs = (this.failureCount.rigs || 0) + 1;
+      if (this.failureCount.rigs <= 3) {
+        console.warn(`[gtviz] Rig poll failed (attempt ${this.failureCount.rigs}): ${err.message}`);
+      }
+      // Graceful degradation: keep last known state
+    }
+  }
+
+  parseRigList(output) {
+    try {
+      return JSON.parse(output);
+    } catch {
+      return this.parseRigListText(output);
+    }
+  }
+
+  parseRigListText(output) {
+    const rigs = {};
+    const lines = output.split('\n');
+    let currentRig = null;
+
+    for (const line of lines) {
+      // Rig names are lines starting with exactly 2 spaces followed by a word (no colon)
+      const rigMatch = line.match(/^  ([a-zA-Z_][a-zA-Z0-9_-]*)$/);
+      if (rigMatch) {
+        currentRig = rigMatch[1];
+        rigs[currentRig] = {
+          name: currentRig,
+          polecats: 0,
+          crew: 0,
+          agents: [],
+          status: 'unknown'
+        };
+        continue;
+      }
+
+      // Parse metadata lines for current rig
+      if (currentRig && line.includes('Polecats:')) {
+        const polecatMatch = line.match(/Polecats:\s*(\d+)/);
+        const crewMatch = line.match(/Crew:\s*(\d+)/);
+        if (polecatMatch) rigs[currentRig].polecats = parseInt(polecatMatch[1]);
+        if (crewMatch) rigs[currentRig].crew = parseInt(crewMatch[1]);
+      }
+
+      if (currentRig && line.includes('Agents:')) {
+        const agentsMatch = line.match(/Agents:\s*\[([^\]]*)\]/);
+        if (agentsMatch) {
+          rigs[currentRig].agents = agentsMatch[1].split(/\s+/).filter(a => a);
+        }
+      }
+    }
+
+    return rigs;
+  }
+
+  async pollAgents() {
+    const rigs = this.state.getRigs();
+    for (const rig of rigs) {
+      try {
+        const agents = await withRetry(
+          () => this.getAgentsFromDir(rig),
+          `pollAgents(${rig})`
+        );
+        this.state.updateAgents(rig, agents);
+        this.failureCount[`agents-${rig}`] = 0;
+      } catch (e) {
+        const key = `agents-${rig}`;
+        this.failureCount[key] = (this.failureCount[key] || 0) + 1;
+        if (this.failureCount[key] <= 3) {
+          console.warn(`[gtviz] Agent poll failed for ${rig}: ${e.message}`);
+        }
+        // Graceful degradation: keep last known agent state
+      }
+    }
+  }
+
+  async getAgentsFromDir(rig) {
+    const agents = [];
+    const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
+    const rigPath = `${gtDir}/${rig}`;
+
+    // Standard agents
+    const standardAgents = ['witness', 'refinery', 'mayor'];
+    for (const agent of standardAgents) {
+      try {
+        const { stdout } = await execAsync(`ls -d ${rigPath}/${agent} 2>/dev/null`);
+        if (stdout.trim()) {
+          agents.push({
+            name: agent,
+            role: agent,
+            rig: rig,
+            status: 'unknown'
+          });
+        }
+      } catch {}
+    }
+
+    // Check crew
+    try {
+      const { stdout } = await execAsync(`ls ${rigPath}/crew 2>/dev/null`);
+      const crewMembers = stdout.split('\n').filter(c => c.trim());
+      for (const crew of crewMembers) {
+        agents.push({
+          name: crew,
+          role: 'crew',
+          rig: rig,
+          status: 'unknown'
+        });
+      }
+    } catch {}
+
+    // Check polecats
+    try {
+      const { stdout } = await execAsync(`ls ${rigPath}/polecats 2>/dev/null`);
+      const polecats = stdout.split('\n').filter(p => p.trim());
+      for (const polecat of polecats) {
+        agents.push({
+          name: polecat,
+          role: 'polecat',
+          rig: rig,
+          status: 'unknown'
+        });
+      }
+    } catch {}
+
+    // Detect actual status for each agent
+    const agentsWithStatus = await this.agentMonitor.getAgentStatuses(agents);
+    return agentsWithStatus;
+  }
+
+  parseAgents(output, rig) {
+    const agents = [];
+    const lines = output.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const match = line.match(/(\S+)\s+(\S+)?\s*(\S+)?/);
+      if (match && match[1]) {
+        agents.push({
+          name: match[1],
+          role: match[2] || 'agent',
+          rig: rig,
+          status: match[3] || 'unknown'
+        });
+      }
+    }
+    return agents;
+  }
+
+  async pollBeads() {
+    const rigs = this.state.getRigs();
+    const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
+
+    for (const rig of rigs) {
+      try {
+        const beads = await withRetry(async () => {
+          try {
+            const { stdout } = await execAsync(`bd list --json 2>/dev/null`, {
+              cwd: `${gtDir}/${rig}`,
+              timeout: 10000
+            });
+            return this.parseBeads(stdout);
+          } catch {
+            const { stdout } = await execAsync(`bd list 2>/dev/null || echo ""`, {
+              cwd: `${gtDir}/${rig}`,
+              timeout: 10000
+            });
+            return this.parseBeadsText(stdout);
+          }
+        }, `pollBeads(${rig})`);
+
+        this.state.updateBeads(rig, beads);
+        this.failureCount[`beads-${rig}`] = 0;
+      } catch (e) {
+        const key = `beads-${rig}`;
+        this.failureCount[key] = (this.failureCount[key] || 0) + 1;
+        if (this.failureCount[key] <= 3) {
+          console.warn(`[gtviz] Bead poll failed for ${rig}: ${e.message}`);
+        }
+        // Graceful degradation: keep last known bead state
+      }
+    }
+  }
+
+  parseBeads(output) {
+    try {
+      return JSON.parse(output);
+    } catch {
+      return this.parseBeadsText(output);
+    }
+  }
+
+  parseBeadsText(output) {
+    const beads = [];
+    const lines = output.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const match = line.match(/(\S+)\s+(open|in_progress|done)?\s*(.*)/);
+      if (match && match[1]) {
+        beads.push({
+          id: match[1],
+          status: match[2] || 'open',
+          title: match[3] || ''
+        });
+      }
+    }
+    return beads;
+  }
 }

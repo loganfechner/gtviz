@@ -1,104 +1,86 @@
-/**
- * State Manager
- *
- * Manages in-memory state for the gtviz server.
- * Tracks agents, hooks, and notifies subscribers of changes.
- */
+import { EventEmitter } from 'events';
 
-/**
- * Create a state manager
- * @returns {Object} State manager
- */
-export function createStateManager() {
-  const state = {
-    agents: {},      // Map of agent name -> agent info
-    hooks: {},       // Map of agent name -> hook status
-    lastUpdated: null
-  };
+export class StateManager extends EventEmitter {
+  constructor() {
+    super();
+    this.state = {
+      rigs: {},
+      agents: {},
+      beads: {},
+      hooks: {},
+      mail: [],
+      events: [],
+      agentHistory: {}  // Track status changes per agent
+    };
+    this.previousStatus = {};  // For detecting changes
+  }
 
-  const subscribers = new Set();
+  getState() {
+    return this.state;
+  }
 
-  /**
-   * Notify all subscribers of state change
-   * @param {string} type - Type of update
-   * @param {Object} data - Update data
-   */
-  const notify = (type, data) => {
-    const message = { type, data, timestamp: new Date().toISOString() };
-    for (const subscriber of subscribers) {
-      try {
-        subscriber(message);
-      } catch (error) {
-        console.error('Subscriber error:', error);
-      }
-    }
-  };
+  getRigs() {
+    return Object.keys(this.state.rigs);
+  }
 
-  return {
-    /**
-     * Get current state snapshot
-     */
-    getState() {
-      return { ...state };
-    },
+  updateRigs(rigs) {
+    this.state.rigs = rigs;
+    this.emit('update', this.state);
+  }
 
-    /**
-     * Get all hook statuses
-     */
-    getHooks() {
-      return { ...state.hooks };
-    },
+  updateAgents(rigName, agents) {
+    // Track status changes in history
+    for (const agent of agents) {
+      const key = `${rigName}/${agent.name}`;
+      const prevStatus = this.previousStatus[key];
 
-    /**
-     * Update hook status for all agents
-     * @param {Object} hooks - Map of agent name to hook status
-     */
-    updateHooks(hooks) {
-      const changes = [];
-
-      for (const [agentName, hookStatus] of Object.entries(hooks)) {
-        const previous = state.hooks[agentName];
-
-        // Check if anything changed
-        if (!previous ||
-            previous.beadId !== hookStatus.beadId ||
-            previous.status !== hookStatus.status) {
-          changes.push({
-            agent: agentName,
-            previous: previous || null,
-            current: hookStatus
-          });
+      if (prevStatus !== agent.status) {
+        // Status changed - record in history
+        if (!this.state.agentHistory[key]) {
+          this.state.agentHistory[key] = [];
         }
-
-        state.hooks[agentName] = hookStatus;
-      }
-
-      state.lastUpdated = new Date().toISOString();
-
-      // Only notify if there were changes
-      if (changes.length > 0) {
-        notify('hooks:updated', {
-          hooks: state.hooks,
-          changes
+        this.state.agentHistory[key].unshift({
+          status: agent.status,
+          timestamp: new Date().toISOString(),
+          agent: agent.name,
+          rig: rigName
         });
+        // Keep last 50 entries per agent
+        if (this.state.agentHistory[key].length > 50) {
+          this.state.agentHistory[key] = this.state.agentHistory[key].slice(0, 50);
+        }
+        this.previousStatus[key] = agent.status;
       }
-    },
-
-    /**
-     * Subscribe to state changes
-     * @param {Function} callback - Callback for state changes
-     * @returns {Function} Unsubscribe function
-     */
-    subscribe(callback) {
-      subscribers.add(callback);
-      return () => subscribers.delete(callback);
-    },
-
-    /**
-     * Get subscriber count
-     */
-    getSubscriberCount() {
-      return subscribers.size;
     }
-  };
+
+    this.state.agents[rigName] = agents;
+    this.emit('update', this.state);
+  }
+
+  updateBeads(rigName, beads) {
+    this.state.beads[rigName] = beads;
+    this.emit('update', this.state);
+  }
+
+  updateHooks(rigName, hooks) {
+    this.state.hooks[rigName] = hooks;
+    this.emit('update', this.state);
+  }
+
+  addEvent(event) {
+    this.state.events.unshift(event);
+    // Keep only last 100 events
+    if (this.state.events.length > 100) {
+      this.state.events = this.state.events.slice(0, 100);
+    }
+    this.emit('event', event);
+  }
+
+  addMail(mail) {
+    this.state.mail.unshift(mail);
+    if (this.state.mail.length > 50) {
+      this.state.mail = this.state.mail.slice(0, 50);
+    }
+    this.emit('event', { type: 'mail', ...mail });
+  }
 }
