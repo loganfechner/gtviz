@@ -3,3 +3,5 @@
 .logs/
 .beads/
 node_modules/
+client/dist/
+client/package-lock.json
