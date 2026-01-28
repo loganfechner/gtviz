@@ -1,7 +1,7 @@
 {
   "name": "gtviz",
   "version": "0.1.0",
-  "description": "Gas Town Agent Status Visualization",
+  "description": "Real-time Gas Town Visualization",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -15,7 +15,11 @@
     "start": "node src/index.js",
     "watch": "node src/index.js watch",
     "serve": "node src/index.js serve",
-    "test": "node --test test/"
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "test": "node --test test/ server/**/*.test.js"
   },
   "keywords": [
     "gas-town",
@@ -26,5 +30,13 @@
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "chokidar": "^3.5.3"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }
