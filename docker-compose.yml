@@ -1,0 +1,37 @@
+services:
+  # Development mode - runs both backend and frontend with hot reload
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"   # Backend server
+      - "5173:5173"   # Vite dev server
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+      - ${GT_DIR:-$HOME/gt}:/gt:ro
+    environment:
+      - NODE_ENV=development
+      - GT_DIR=/gt
+      - PORT=3001
+    profiles:
+      - dev
+
+  # Production mode - optimized single container
+  production:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ${GT_DIR:-$HOME/gt}:/gt:ro
+    environment:
+      - NODE_ENV=production
+      - GT_DIR=/gt
+      - PORT=3001
+    restart: unless-stopped
+    profiles:
+      - prod
