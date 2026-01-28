@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHookPoller } from './gt-poller.js';
 import { createStateManager } from './state.js';
+import { createMetricsCollector } from './metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,10 +32,22 @@ const wss = new WebSocketServer({ server });
 // Initialize state manager
 const stateManager = createStateManager();
 
-// Initialize hook poller
-const hookPoller = createHookPoller(RIG_PATH, (hooks) => {
+// Initialize metrics collector
+const metricsCollector = createMetricsCollector();
+
+// Initialize hook poller with metrics tracking
+const hookPoller = createHookPoller(RIG_PATH, (hooks, pollDuration) => {
+  metricsCollector.recordPollDuration(pollDuration);
+  metricsCollector.updateAgentActivity(hooks);
   stateManager.updateHooks(hooks);
 }, POLL_INTERVAL);
+
+// Track state changes for metrics
+stateManager.subscribe((message) => {
+  if (message.type === 'hooks:updated' && message.data.changes) {
+    metricsCollector.recordStateChange(message.data.changes.length);
+  }
+});
 
 // Subscribe to state changes and broadcast to WebSocket clients
 stateManager.subscribe((message) => {
@@ -46,15 +59,32 @@ stateManager.subscribe((message) => {
   });
 });
 
+// Broadcast metrics periodically (every 5 seconds)
+const METRICS_BROADCAST_INTERVAL = 5000;
+setInterval(() => {
+  const metrics = metricsCollector.getMetrics();
+  const payload = JSON.stringify({
+    type: 'metrics:update',
+    data: metrics,
+    timestamp: new Date().toISOString()
+  });
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) { // OPEN
+      client.send(payload);
+    }
+  });
+}, METRICS_BROADCAST_INTERVAL);
+
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   console.log('Client connected');
 
   // Send current state on connection
   const currentState = stateManager.getState();
+  const currentMetrics = metricsCollector.getMetrics();
   ws.send(JSON.stringify({
     type: 'initial',
-    data: currentState,
+    data: { ...currentState, metrics: currentMetrics },
     timestamp: new Date().toISOString()
   }));
 
@@ -120,6 +150,14 @@ app.get('/api/health', (req, res) => {
     rigPath: RIG_PATH,
     pollInterval: POLL_INTERVAL,
     connectedClients: wss.clients.size,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get metrics
+app.get('/api/metrics', (req, res) => {
+  res.json({
+    metrics: metricsCollector.getMetrics(),
     timestamp: new Date().toISOString()
   });
 });
