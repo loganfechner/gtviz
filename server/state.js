@@ -44,7 +44,8 @@ export class StateManager extends EventEmitter {
       metrics: {},       // System metrics
       beadHistory: {},   // Track status changes per bead
       logs: [],          // Log entries from town.log, daemon.log
-      agentStats: {}     // Performance stats per agent: completions, durations
+      agentStats: {},    // Performance stats per agent: completions, durations
+      alerts: []         // Active alerts from anomaly detector
     };
     /** @type {Object<string, string>} */
     this.previousStatus = {};
@@ -354,5 +355,34 @@ export class StateManager extends EventEmitter {
    */
   getAgentStats(agentKey) {
     return this.state.agentStats[agentKey] || null;
+  }
+
+  addAlert(alert) {
+    this.state.alerts.unshift(alert);
+    if (this.state.alerts.length > 100) {
+      this.state.alerts = this.state.alerts.slice(0, 100);
+    }
+    this.emit('alert', alert);
+  }
+
+  updateAlert(alertId, updates) {
+    const alert = this.state.alerts.find(a => a.id === alertId);
+    if (alert) {
+      Object.assign(alert, updates);
+      this.emit('alertUpdated', alert);
+    }
+  }
+
+  removeAlert(alertId) {
+    const index = this.state.alerts.findIndex(a => a.id === alertId);
+    if (index !== -1) {
+      this.state.alerts.splice(index, 1);
+      this.emit('update', this.state);
+    }
+  }
+
+  setAlerts(alerts) {
+    this.state.alerts = alerts;
+    this.emit('update', this.state);
   }
 }

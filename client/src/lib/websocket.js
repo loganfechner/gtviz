@@ -12,13 +12,17 @@ export const state = writable({
   beads: {},
   hooks: {},
   mail: [],
-  errors: []
+  errors: [],
+  alerts: []
 });
 
 export const events = writable([]);
 
 // Separate errors store for UI components that only care about errors
 export const errors = writable([]);
+
+// Alerts store for tracking active alerts
+export const alerts = writable([]);
 
 // Connection status store for UI display
 export const connectionStatus = writable({
@@ -152,6 +156,31 @@ export function connectWebSocket(onStatusChange) {
           connectionStatus.update(s => ({
             ...s,
             lastUpdateTime: now
+          }));
+        } else if (msg.type === 'alert') {
+          // New alert received
+          alerts.update(a => [msg.alert, ...a].slice(0, 100));
+          state.update(s => ({
+            ...s,
+            alerts: [msg.alert, ...(s.alerts || [])].slice(0, 100)
+          }));
+        } else if (msg.type === 'alertUpdated') {
+          // Alert was acknowledged or resolved
+          alerts.update(a => a.map(alert =>
+            alert.id === msg.alert.id ? msg.alert : alert
+          ));
+          state.update(s => ({
+            ...s,
+            alerts: (s.alerts || []).map(alert =>
+              alert.id === msg.alert.id ? msg.alert : alert
+            )
+          }));
+        } else if (msg.type === 'alertDismissed') {
+          // Alert was dismissed
+          alerts.update(a => a.filter(alert => alert.id !== msg.alertId));
+          state.update(s => ({
+            ...s,
+            alerts: (s.alerts || []).filter(alert => alert.id !== msg.alertId)
           }));
         }
       } catch (err) {

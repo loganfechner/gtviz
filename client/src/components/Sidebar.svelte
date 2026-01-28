@@ -9,6 +9,7 @@
   import ErrorPanel from './ErrorPanel.svelte';
   import BeadLifecycleWaterfall from './BeadLifecycleWaterfall.svelte';
   import DependencyGraph from './DependencyGraph.svelte';
+  import AlertsPanel from './AlertsPanel.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -23,6 +24,7 @@
   export let hasInitialData = false;
   export let logs = [];
   export let agentStats = {};
+  export let alerts = [];
 
   $: errorCount = errors.filter(e => e.severity === 'error').length;
   $: warningCount = errors.filter(e => e.severity === 'warning').length;
@@ -35,6 +37,9 @@
   $: currentAgentHistory = selectedAgent
     ? (agentHistory[`${rig}/${selectedAgent.name}`] || [])
     : [];
+
+  $: unacknowledgedAlertCount = alerts.filter(a => !a.acknowledged && !a.resolved).length;
+  $: criticalAlertCount = alerts.filter(a => a.severity === 'critical' && !a.resolved).length;
 
   function handleMailClick(e) {
     dispatch('mailclick', e.detail);
@@ -79,6 +84,14 @@
         <span class="warning-badge">{warningCount}</span>
       {/if}
     </button>
+    <button class:active={activeTab === 'alerts'} on:click={() => activeTab = 'alerts'}
+            class:has-critical={criticalAlertCount > 0}
+            class:has-alerts={unacknowledgedAlertCount > 0}>
+      Alerts
+      {#if unacknowledgedAlertCount > 0}
+        <span class="badge" class:critical={criticalAlertCount > 0}>{unacknowledgedAlertCount}</span>
+      {/if}
+    </button>
   </nav>
 
   <div class="content" class:graph-content={activeTab === 'deps'}>
@@ -100,6 +113,8 @@
       <MetricsDashboard {metrics} loading={!hasInitialData} />
     {:else if activeTab === 'errors'}
       <ErrorPanel {errors} loading={!hasInitialData} />
+    {:else if activeTab === 'alerts'}
+      <AlertsPanel {alerts} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
@@ -148,6 +163,14 @@
     border-bottom-color: #f85149;
   }
 
+  .tabs button.has-alerts {
+    color: #d29922;
+  }
+
+  .tabs button.has-critical {
+    color: #f85149;
+  }
+
   .error-badge, .warning-badge {
     display: inline-flex;
     align-items: center;
@@ -169,6 +192,25 @@
   .warning-badge {
     background: #f0883e;
     color: white;
+  }
+
+  .tabs button .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: #d29922;
+    color: #161b22;
+    border-radius: 8px;
+  }
+
+  .tabs button .badge.critical {
+    background: #f85149;
   }
 
   .content {

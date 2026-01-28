@@ -87,6 +87,7 @@
   $: metrics = $state.metrics || {};
   $: logs = $state.logs || [];
   $: agentStats = $state.agentStats || {};
+  $: alerts = $state.alerts || [];
 
   // Apply filters to agents
   $: filteredAgents = currentAgents.filter(agent => {
@@ -181,6 +182,7 @@
       {metrics}
       {logs}
       {agentStats}
+      {alerts}
       on:mailclick={handleMailClick}
       on:eventclick={handleEventClick}
       {hasInitialData}
