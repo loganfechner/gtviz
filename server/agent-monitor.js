@@ -1,13 +1,32 @@
+/**
+ * Agent Monitor
+ *
+ * Detects running/idle/stopped status for Gas Town agents by checking:
+ * - Running claude processes associated with agent directories
+ * - Tmux sessions for active agents
+ * - Recent activity via .events.jsonl or session files
+ *
+ * @module agent-monitor
+ */
+
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { stat, readdir } from 'fs/promises';
 import { join } from 'path';
+
+/**
+ * @typedef {import('./types.js').Agent} Agent
+ * @typedef {import('./types.js').AgentRole} AgentRole
+ * @typedef {import('./types.js').AgentStatusValue} AgentStatusValue
+ */
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 /**
  * Escape string for use in shell commands (prevents injection)
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
  */
 function escapeShell(str) {
   if (typeof str !== 'string') return '';
@@ -20,6 +39,8 @@ function escapeShell(str) {
 
 /**
  * Validate agent/rig name - must be safe identifier
+ * @param {string} name - Name to validate
+ * @returns {boolean} True if valid
  */
 function isValidName(name) {
   return typeof name === 'string' && /^[a-zA-Z0-9_\-]+$/.test(name);
@@ -27,6 +48,9 @@ function isValidName(name) {
 
 /**
  * Safe exec with timeout - returns empty string on failure
+ * @param {string} cmd - Command to execute
+ * @param {Object} [options] - Exec options
+ * @returns {Promise<string>} Command output or empty string on failure
  */
 async function safeExec(cmd, options = {}) {
   try {
@@ -39,6 +63,10 @@ async function safeExec(cmd, options = {}) {
 
 /**
  * Safe execFile with timeout - returns empty string on failure
+ * @param {string} cmd - Command to execute
+ * @param {string[]} args - Command arguments
+ * @param {Object} [options] - Exec options
+ * @returns {Promise<string>} Command output or empty string on failure
  */
 async function safeExecFile(cmd, args, options = {}) {
   try {
@@ -59,13 +87,18 @@ async function safeExecFile(cmd, args, options = {}) {
  */
 export class AgentMonitor {
   constructor() {
+    /** @type {string} */
     this.gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
-    this.idleThresholdMs = 60000; // Consider idle if no activity for 60 seconds
+    /** @type {number} */
+    this.idleThresholdMs = 60000;
   }
 
   /**
    * Get status for a single agent
-   * @returns 'running' | 'idle' | 'stopped'
+   * @param {string} rig - Rig name
+   * @param {string} agentName - Agent name
+   * @param {AgentRole} role - Agent role
+   * @returns {Promise<AgentStatusValue>} Agent status
    */
   async getAgentStatus(rig, agentName, role) {
     const agentPath = this.getAgentPath(rig, agentName, role);
@@ -88,6 +121,10 @@ export class AgentMonitor {
 
   /**
    * Get agent directory path based on role
+   * @param {string} rig - Rig name
+   * @param {string} agentName - Agent name
+   * @param {AgentRole} role - Agent role
+   * @returns {string} Full path to agent directory
    */
   getAgentPath(rig, agentName, role) {
     const rigPath = join(this.gtDir, rig);
@@ -108,6 +145,10 @@ export class AgentMonitor {
 
   /**
    * Check for running claude process associated with agent
+   * @param {string} rig - Rig name
+   * @param {string} agentName - Agent name
+   * @param {AgentRole} role - Agent role
+   * @returns {Promise<boolean>} True if process is running
    */
   async checkForProcess(rig, agentName, role) {
     // Validate inputs to prevent injection
@@ -138,6 +179,10 @@ export class AgentMonitor {
 
   /**
    * Check if agent has an active tmux session
+   * @param {string} rig - Rig name
+   * @param {string} agentName - Agent name
+   * @param {AgentRole} role - Agent role
+   * @returns {Promise<boolean>} True if tmux session exists
    */
   async checkTmuxSession(rig, agentName, role) {
     // Validate inputs to prevent injection
@@ -168,6 +213,8 @@ export class AgentMonitor {
 
   /**
    * Check for recent activity to distinguish running from idle
+   * @param {string} agentPath - Full path to agent directory
+   * @returns {Promise<boolean>} True if recent activity detected
    */
   async checkRecentActivity(agentPath) {
     const now = Date.now();
@@ -207,6 +254,8 @@ export class AgentMonitor {
 
   /**
    * Batch check status for multiple agents
+   * @param {Agent[]} agents - Array of agents to check
+   * @returns {Promise<Agent[]>} Agents with status populated
    */
   async getAgentStatuses(agents) {
     const results = await Promise.all(

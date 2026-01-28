@@ -1,15 +1,45 @@
+/**
+ * Log File Watcher
+ *
+ * Watches Gas Town log files and streams new entries to the state manager.
+ * Supports tailing multiple log files across all rigs.
+ *
+ * @module logs-watcher
+ */
+
 import chokidar from 'chokidar';
 import { readFileSync, statSync } from 'fs';
 import logger from './logger.js';
 
+/**
+ * @typedef {import('./types.js').LogEntry} LogEntry
+ * @typedef {import('./types.js').LogLevel} LogLevel
+ * @typedef {import('./types.js').LogType} LogType
+ * @typedef {import('./state.js').StateManager} StateManager
+ */
+
+/**
+ * LogsWatcher - Watches and tails Gas Town log files
+ */
 export class LogsWatcher {
+  /**
+   * Create a new LogsWatcher
+   * @param {StateManager} state - State manager instance
+   */
   constructor(state) {
+    /** @type {StateManager} */
     this.state = state;
+    /** @type {import('chokidar').FSWatcher[]} */
     this.watchers = [];
+    /** @type {string} */
     this.gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
-    this.filePositions = {}; // Track read positions for tailing
+    /** @type {Object<string, number>} */
+    this.filePositions = {};
   }
 
+  /**
+   * Start watching log files
+   */
   start() {
     const patterns = [
       `${this.gtDir}/*/town.log`,
@@ -38,6 +68,9 @@ export class LogsWatcher {
     logger.info('logs-watcher', 'Log file watcher started');
   }
 
+  /**
+   * Stop watching log files
+   */
   stop() {
     for (const watcher of this.watchers) {
       watcher.close();
@@ -45,6 +78,10 @@ export class LogsWatcher {
     this.watchers = [];
   }
 
+  /**
+   * Handle a new log file being added
+   * @param {string} filePath - Path to the new log file
+   */
   handleNewFile(filePath) {
     try {
       const stats = statSync(filePath);
@@ -67,6 +104,10 @@ export class LogsWatcher {
     }
   }
 
+  /**
+   * Tail new content from a log file
+   * @param {string} filePath - Path to the log file
+   */
   tailFile(filePath) {
     try {
       const stats = statSync(filePath);
@@ -97,6 +138,12 @@ export class LogsWatcher {
     }
   }
 
+  /**
+   * Parse a log line into a structured entry
+   * @param {string} line - Raw log line
+   * @param {string} filePath - Source file path
+   * @returns {LogEntry|null} Parsed log entry or null if empty
+   */
   parseLine(line, filePath) {
     const logInfo = this.extractLogInfo(filePath);
 
@@ -131,10 +178,17 @@ export class LogsWatcher {
     };
   }
 
+  /**
+   * Extract rig/agent/logType info from file path
+   * @param {string} filePath - Full path to log file
+   * @returns {{rig: string, agent: string|null, logType: LogType, source: string}} Log source info
+   */
   extractLogInfo(filePath) {
     const parts = filePath.replace(this.gtDir + '/', '').split('/');
     const rig = parts[0];
+    /** @type {string|null} */
     let agent = null;
+    /** @type {LogType} */
     let logType = 'unknown';
 
     const filename = parts[parts.length - 1];
@@ -159,6 +213,11 @@ export class LogsWatcher {
     return { rig, agent, logType, source: filePath };
   }
 
+  /**
+   * Infer log level from message content
+   * @param {string} message - Log message
+   * @returns {LogLevel} Inferred log level
+   */
   inferLevel(message) {
     const lower = message.toLowerCase();
     if (lower.includes('error') || lower.includes('fail')) return 'error';

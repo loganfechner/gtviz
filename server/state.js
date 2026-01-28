@@ -1,8 +1,30 @@
 import { EventEmitter } from 'events';
 
+/**
+ * @typedef {import('./types.js').State} State
+ * @typedef {import('./types.js').Agent} Agent
+ * @typedef {import('./types.js').Bead} Bead
+ * @typedef {import('./types.js').Rig} Rig
+ * @typedef {import('./types.js').Event} Event
+ * @typedef {import('./types.js').LogEntry} LogEntry
+ * @typedef {import('./types.js').Metrics} Metrics
+ * @typedef {import('./types.js').AgentStats} AgentStats
+ * @typedef {import('./types.js').AgentCompletion} AgentCompletion
+ * @typedef {import('./types.js').HookData} HookData
+ */
+
+/**
+ * StateManager - Centralized state management for gtviz
+ *
+ * Manages all application state including rigs, agents, beads, hooks,
+ * events, logs, and metrics. Emits events on state changes for reactive updates.
+ *
+ * @extends EventEmitter
+ */
 export class StateManager extends EventEmitter {
   constructor() {
     super();
+    /** @type {State} */
     this.state = {
       rigs: {},
       agents: {},
@@ -10,29 +32,48 @@ export class StateManager extends EventEmitter {
       hooks: {},
       mail: [],
       events: [],
-      agentHistory: {},  // Track status changes per agent
-      metrics: {},       // System metrics
-      beadHistory: {},   // Track status changes per bead
-      logs: [],          // Log entries from town.log, daemon.log
-      agentStats: {}     // Performance stats per agent: completions, durations
+      agentHistory: {},
+      metrics: {},
+      beadHistory: {},
+      logs: [],
+      agentStats: {}
     };
-    this.previousStatus = {};  // For detecting agent status changes
-    this.previousBeadStatus = {};  // For detecting bead status changes
+    /** @type {Object<string, string>} */
+    this.previousStatus = {};
+    /** @type {Object<string, string>} */
+    this.previousBeadStatus = {};
   }
 
+  /**
+   * Get the current application state
+   * @returns {State} Current state
+   */
   getState() {
     return this.state;
   }
 
+  /**
+   * Get list of rig names
+   * @returns {string[]} Array of rig names
+   */
   getRigs() {
     return Object.keys(this.state.rigs);
   }
 
+  /**
+   * Update rig data
+   * @param {Object<string, Rig>} rigs - Rigs by name
+   */
   updateRigs(rigs) {
     this.state.rigs = rigs;
     this.emit('update', this.state);
   }
 
+  /**
+   * Update agents for a rig, tracking status changes in history
+   * @param {string} rigName - Rig name
+   * @param {Agent[]} agents - Array of agent objects
+   */
   updateAgents(rigName, agents) {
     // Track status changes in history
     for (const agent of agents) {
@@ -62,6 +103,11 @@ export class StateManager extends EventEmitter {
     this.emit('update', this.state);
   }
 
+  /**
+   * Update beads for a rig, tracking status changes in history
+   * @param {string} rigName - Rig name
+   * @param {Bead[]} beads - Array of bead objects
+   */
   updateBeads(rigName, beads) {
     // Track status changes in history
     for (const bead of beads) {
@@ -106,20 +152,32 @@ export class StateManager extends EventEmitter {
     this.emit('update', this.state);
   }
 
+  /**
+   * Update hook data for a rig
+   * @param {string} rigName - Rig name
+   * @param {Object<string, HookData>} hooks - Hooks by agent name
+   */
   updateHooks(rigName, hooks) {
     this.state.hooks[rigName] = hooks;
     this.emit('update', this.state);
   }
 
+  /**
+   * Add an event to the event stream
+   * @param {Event} event - Event object
+   */
   addEvent(event) {
     this.state.events.unshift(event);
-    // Keep only last 100 events
     if (this.state.events.length > 100) {
       this.state.events = this.state.events.slice(0, 100);
     }
     this.emit('event', event);
   }
 
+  /**
+   * Add a mail message to the mail list
+   * @param {Object} mail - Mail object with from, to, subject, etc.
+   */
   addMail(mail) {
     this.state.mail.unshift(mail);
     if (this.state.mail.length > 50) {
@@ -128,11 +186,19 @@ export class StateManager extends EventEmitter {
     this.emit('event', { type: 'mail', ...mail });
   }
 
+  /**
+   * Update system metrics
+   * @param {Metrics} metrics - Metrics snapshot
+   */
   updateMetrics(metrics) {
     this.state.metrics = metrics;
     this.emit('metrics', metrics);
   }
 
+  /**
+   * Add a log entry to the logs list
+   * @param {LogEntry} log - Parsed log entry
+   */
   addLog(log) {
     this.state.logs.unshift(log);
     if (this.state.logs.length > 500) {
@@ -141,6 +207,12 @@ export class StateManager extends EventEmitter {
     this.emit('event', { type: 'log', ...log });
   }
 
+  /**
+   * Update agent statistics for performance tracking
+   * @param {string} agentKey - Agent key (rig/agentName)
+   * @param {Object} stats - Stats update
+   * @param {AgentCompletion} [stats.completion] - Completion to record
+   */
   updateAgentStats(agentKey, stats) {
     if (!this.state.agentStats[agentKey]) {
       this.state.agentStats[agentKey] = {
@@ -172,6 +244,11 @@ export class StateManager extends EventEmitter {
     this.emit('update', this.state);
   }
 
+  /**
+   * Get statistics for a specific agent
+   * @param {string} agentKey - Agent key (rig/agentName)
+   * @returns {AgentStats|null} Agent stats or null if not found
+   */
   getAgentStats(agentKey) {
     return this.state.agentStats[agentKey] || null;
   }
