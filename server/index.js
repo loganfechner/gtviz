@@ -5,6 +5,7 @@ import { StateManager } from './state.js';
 import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
+import { createHealthCalculator } from './health-calculator.js';
 import { LogsWatcher } from './logs-watcher.js';
 import logger from './logger.js';
 
@@ -14,6 +15,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 const state = new StateManager();
 const metrics = createMetricsCollector(60);
+const healthCalculator = createHealthCalculator(60);
 const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
@@ -59,9 +61,18 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Broadcast metrics every 5 seconds
+// Broadcast metrics and health score every 5 seconds
 setInterval(() => {
   const metricsData = metrics.getMetrics();
+  const healthScore = healthCalculator.calculate(metricsData);
+  const healthHistory = healthCalculator.getHistory();
+
+  // Add health data to metrics
+  metricsData.health = {
+    ...healthScore,
+    history: healthHistory
+  };
+
   state.updateMetrics(metricsData);
   const message = JSON.stringify({ type: 'metrics', data: metricsData });
   wss.clients.forEach(client => {

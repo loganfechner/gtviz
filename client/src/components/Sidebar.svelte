@@ -5,6 +5,7 @@
   import HookStatus from './HookStatus.svelte';
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
+  import HealthScoreDashboard from './HealthScoreDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
   import ErrorPanel from './ErrorPanel.svelte';
 
@@ -59,6 +60,9 @@
     <button class:active={activeTab === 'insights'} on:click={() => activeTab = 'insights'}>
       Insights
     </button>
+    <button class:active={activeTab === 'health'} on:click={() => activeTab = 'health'}>
+      Health
+    </button>
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
@@ -83,6 +87,8 @@
       <AgentTimeline agent={selectedAgent} history={currentAgentHistory} loading={!hasInitialData} />
     {:else if activeTab === 'insights'}
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
+    {:else if activeTab === 'health'}
+      <HealthScoreDashboard {metrics} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
     {:else if activeTab === 'errors'}
