@@ -5,6 +5,7 @@ import { StateManager } from './state.js';
 import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
+import { LogsWatcher } from './logs-watcher.js';
 import logger from './logger.js';
 
 const app = express();
@@ -15,6 +16,7 @@ const state = new StateManager();
 const metrics = createMetricsCollector(60);
 const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
+const logsWatcher = new LogsWatcher(state);
 
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
@@ -83,4 +85,5 @@ server.listen(PORT, () => {
   logger.info('server', 'gtviz server started', { port: PORT, url: `http://localhost:${PORT}` });
   gtPoller.start();
   fileWatcher.start();
+  logsWatcher.start();
 });
