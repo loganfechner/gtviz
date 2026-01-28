@@ -472,6 +472,7 @@
         style="left: {(node.x || width/2) - 70}px; top: {(node.y || height/2) - 40}px;"
         on:mousedown={(e) => startDrag(e, node)}
         on:click={() => dispatch('select', node)}
+        on:dblclick={() => dispatch('peek', node)}
         role="button"
         tabindex="0"
       >

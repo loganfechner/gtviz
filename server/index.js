@@ -816,6 +816,101 @@ app.post('/api/predictions/refresh', (req, res) => {
   res.json({ status: 'ok', message: 'Forecast refresh triggered' });
 });
 
+// ============================================================================
+// Agent Peek API - Live CLI output
+// ============================================================================
+
+/**
+ * Validate agent/rig/role names to prevent command injection
+ * @param {string} name - Name to validate
+ * @returns {boolean} True if valid
+ */
+function isValidAgentName(name) {
+  return typeof name === 'string' && /^[a-zA-Z0-9_\-]+$/.test(name);
+}
+
+/**
+ * Get the gt peek path for an agent based on role
+ * @param {string} rig - Rig name
+ * @param {string} role - Agent role
+ * @param {string} name - Agent name
+ * @returns {string} Path for gt peek command
+ */
+function getAgentPeekPath(rig, role, name) {
+  if (role === 'polecat') {
+    return `${rig}/polecats/${name}`;
+  } else if (role === 'crew') {
+    return `${rig}/crew/${name}`;
+  } else {
+    // witness, refinery, mayor - direct under rig
+    return `${rig}/${name}`;
+  }
+}
+
+// Get live CLI output for an agent (similar to gt peek)
+app.get('/api/agents/:rig/:role/:name/peek', async (req, res) => {
+  const { rig, role, name } = req.params;
+  const lines = parseInt(req.query.lines, 10) || 100;
+
+  // Validate inputs to prevent injection
+  if (!isValidAgentName(rig) || !isValidAgentName(role) || !isValidAgentName(name)) {
+    return res.status(400).json({ error: 'Invalid rig, role, or agent name' });
+  }
+
+  // Validate role
+  const validRoles = ['polecat', 'crew', 'witness', 'refinery', 'mayor'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // Validate lines parameter
+  if (isNaN(lines) || lines < 1 || lines > 1000) {
+    return res.status(400).json({ error: 'Lines must be between 1 and 1000' });
+  }
+
+  const agentPath = getAgentPeekPath(rig, role, name);
+
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+
+    // Execute gt peek with safe parameters
+    const { stdout, stderr } = await execFileAsync('gt', ['peek', agentPath, '-n', String(lines)], {
+      timeout: 10000,
+      maxBuffer: 1024 * 1024, // 1MB
+      env: { ...process.env }
+    });
+
+    res.json({
+      output: stdout,
+      stderr: stderr || null,
+      agent: name,
+      rig,
+      role,
+      lines,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    // Handle specific error cases
+    if (err.code === 'ENOENT') {
+      return res.status(500).json({ error: 'gt command not found. Is Gas Town installed?' });
+    }
+    if (err.killed) {
+      return res.status(504).json({ error: 'Command timed out' });
+    }
+    // gt peek returns non-zero if no session, but may still have useful stderr
+    if (err.stderr) {
+      return res.status(404).json({
+        error: 'No active session found',
+        details: err.stderr.trim()
+      });
+    }
+    logger.error('peek', 'Failed to peek agent', { rig, role, name, error: err.message });
+    return res.status(500).json({ error: err.message || 'Failed to fetch agent output' });
+  }
+});
+
 // Presence API for real-time collaboration
 app.get('/api/presence', (req, res) => {
   res.json(sessionManager.getPresenceSummary());

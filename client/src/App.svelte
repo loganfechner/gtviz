@@ -6,6 +6,7 @@
   import Toast from './components/Toast.svelte';
   import MailModal from './components/MailModal.svelte';
   import EventDetailModal from './components/EventDetailModal.svelte';
+  import AgentPeekModal from './components/AgentPeekModal.svelte';
   import Spinner from './components/Spinner.svelte';
   import { connectWebSocket, state, events, errors, errorPatterns, connectionStatus, isStale, presence } from './lib/websocket.js';
   import PresencePanel from './components/PresencePanel.svelte';
@@ -14,6 +15,7 @@
   let selectedMail = null;
   let selectedEvent = null;
   let showPresencePanel = false;
+  let peekAgent = null;
 
   onMount(() => {
     connectWebSocket((isConnected) => {
@@ -147,6 +149,14 @@
       if (found) selectedAgent = found;
     }
   }
+
+  function handleAgentPeek(agent) {
+    peekAgent = agent;
+  }
+
+  function closePeekModal() {
+    peekAgent = null;
+  }
 </script>
 
 <div class="app">
@@ -212,6 +222,7 @@
         mail={$state.mail || []}
         rig={selectedRig}
         on:select={(e) => handleAgentSelect(e.detail)}
+        on:peek={(e) => handleAgentPeek(e.detail)}
       />
     </div>
 
@@ -245,6 +256,11 @@
   <EventDetailModal
     event={selectedEvent}
     on:close={closeEventModal}
+  />
+  <AgentPeekModal
+    agent={peekAgent}
+    rig={selectedRig}
+    on:close={closePeekModal}
   />
   <Toast />
 </div>
