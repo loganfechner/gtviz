@@ -11,9 +11,11 @@ export class StateManager extends EventEmitter {
       mail: [],
       events: [],
       agentHistory: {},  // Track status changes per agent
-      metrics: {}        // System metrics
+      metrics: {},       // System metrics
+      beadHistory: {}    // Track status changes per bead
     };
-    this.previousStatus = {};  // For detecting changes
+    this.previousStatus = {};  // For detecting agent status changes
+    this.previousBeadStatus = {};  // For detecting bead status changes
   }
 
   getState() {
@@ -59,6 +61,45 @@ export class StateManager extends EventEmitter {
   }
 
   updateBeads(rigName, beads) {
+    // Track status changes in history
+    for (const bead of beads) {
+      const key = `${rigName}/${bead.id}`;
+      const prevStatus = this.previousBeadStatus[key];
+
+      if (prevStatus !== bead.status) {
+        // Status changed - record in history
+        if (!this.state.beadHistory[key]) {
+          this.state.beadHistory[key] = [];
+        }
+        this.state.beadHistory[key].unshift({
+          status: bead.status,
+          timestamp: new Date().toISOString(),
+          beadId: bead.id,
+          rig: rigName
+        });
+        // Keep last 50 entries per bead
+        if (this.state.beadHistory[key].length > 50) {
+          this.state.beadHistory[key] = this.state.beadHistory[key].slice(0, 50);
+        }
+        this.previousBeadStatus[key] = bead.status;
+
+        // Add event for status change
+        if (prevStatus) {
+          this.addEvent({
+            type: 'bead_status_change',
+            beadId: bead.id,
+            rig: rigName,
+            from: prevStatus,
+            to: bead.status,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
+      // Attach status history to bead for display in modal
+      bead.statusHistory = this.state.beadHistory[key] || [];
+    }
+
     this.state.beads[rigName] = beads;
     this.emit('update', this.state);
   }
