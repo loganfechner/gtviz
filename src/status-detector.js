@@ -5,7 +5,17 @@
  * Status values: running, idle, stopped
  */
 
-import { execSync, spawn } from 'child_process';
+import { execFileSync } from 'child_process';
+
+/**
+ * Validate rig/polecat name to prevent injection
+ * Only allows alphanumeric, hyphens, and underscores
+ * @param {string} name - Name to validate
+ * @returns {boolean} True if valid
+ */
+function isValidName(name) {
+  return typeof name === 'string' && /^[a-zA-Z0-9_-]+$/.test(name);
+}
 
 /**
  * Agent status enum
@@ -19,12 +29,12 @@ export const AgentStatus = {
 
 /**
  * Execute a gt command and parse JSON output
- * @param {string[]} args - Command arguments
+ * @param {string[]} args - Command arguments (passed as array, not shell string)
  * @returns {object|null} Parsed JSON or null on error
  */
 function execGtJson(args) {
   try {
-    const result = execSync(`gt ${args.join(' ')} --json`, {
+    const result = execFileSync('gt', [...args, '--json'], {
       encoding: 'utf-8',
       timeout: 10000,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -41,9 +51,10 @@ function execGtJson(args) {
  */
 export async function listRigs() {
   try {
-    const result = execSync('gt rig ls 2>/dev/null', {
+    const result = execFileSync('gt', ['rig', 'ls'], {
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
     });
     // Parse rig names from output (one per line)
     return result.trim().split('\n').filter(line => line.trim());
@@ -66,6 +77,9 @@ export function listSessions() {
  * @returns {object[]} Array of polecat objects
  */
 export function listPolecats(rig) {
+  if (!isValidName(rig)) {
+    return [];
+  }
   return execGtJson(['polecat', 'list', rig]) || [];
 }
 
@@ -76,6 +90,9 @@ export function listPolecats(rig) {
  * @returns {object|null} Polecat status object
  */
 export function getPolecatStatus(rig, polecat) {
+  if (!isValidName(rig) || !isValidName(polecat)) {
+    return null;
+  }
   return execGtJson(['polecat', 'status', `${rig}/${polecat}`]);
 }
 
@@ -87,9 +104,14 @@ export function getPolecatStatus(rig, polecat) {
  */
 function getHookStatus(rig, polecat) {
   try {
+    // Validate inputs to prevent injection
+    if (!isValidName(rig) || !isValidName(polecat)) {
+      return { has_work: false };
+    }
+
     // Agent bead ID format: gt-{rig}-polecat-{name}
     const agentBeadId = `gt-${rig}-polecat-${polecat}`;
-    const result = execSync(`gt bd show ${agentBeadId} --json 2>/dev/null`, {
+    const result = execFileSync('gt', ['bd', 'show', agentBeadId, '--json'], {
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -152,6 +174,9 @@ function determineStatus(polecat, hookInfo = {}) {
  * @returns {object[]} Array of agent status objects
  */
 export function getRigAgentStatus(rig) {
+  if (!isValidName(rig)) {
+    return [];
+  }
   const polecats = listPolecats(rig);
 
   return polecats.map(polecat => {

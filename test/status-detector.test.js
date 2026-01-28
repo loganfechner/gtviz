@@ -5,7 +5,10 @@ import {
   StatusDetector,
   getAllAgentStatus,
   getAllAgentStatusFlat,
-  listSessions
+  listSessions,
+  listPolecats,
+  getPolecatStatus,
+  getRigAgentStatus
 } from '../src/status-detector.js';
 
 describe('AgentStatus enum', () => {
@@ -95,5 +98,36 @@ describe('StatusDetector', () => {
     assert.strictEqual(detector.polling, true);
     detector.stop();
     assert.strictEqual(detector.polling, false);
+  });
+});
+
+describe('input validation', () => {
+  test('listPolecats rejects invalid rig names', () => {
+    // Shell injection attempts should return empty array
+    assert.deepStrictEqual(listPolecats('rig; rm -rf /'), []);
+    assert.deepStrictEqual(listPolecats('$(whoami)'), []);
+    assert.deepStrictEqual(listPolecats('rig`id`'), []);
+    assert.deepStrictEqual(listPolecats(''), []);
+    assert.deepStrictEqual(listPolecats(null), []);
+    assert.deepStrictEqual(listPolecats(undefined), []);
+  });
+
+  test('getPolecatStatus rejects invalid names', () => {
+    assert.strictEqual(getPolecatStatus('rig; rm -rf /', 'polecat'), null);
+    assert.strictEqual(getPolecatStatus('rig', 'polecat$(id)'), null);
+    assert.strictEqual(getPolecatStatus('', 'polecat'), null);
+    assert.strictEqual(getPolecatStatus('rig', ''), null);
+  });
+
+  test('getRigAgentStatus rejects invalid rig names', () => {
+    assert.deepStrictEqual(getRigAgentStatus('rig; rm -rf /'), []);
+    assert.deepStrictEqual(getRigAgentStatus('$(whoami)'), []);
+    assert.deepStrictEqual(getRigAgentStatus(''), []);
+  });
+
+  test('valid names are accepted', () => {
+    // These should not throw - actual results depend on gt CLI
+    assert.ok(Array.isArray(listPolecats('valid-rig_123')));
+    assert.ok(Array.isArray(getRigAgentStatus('valid-rig_123')));
   });
 });
