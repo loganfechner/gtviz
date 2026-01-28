@@ -9,9 +9,30 @@
 
   $: wsConnections = metrics.wsConnections || 0;
   $: totalEvents = metrics.totalEvents || 0;
-  $: lastPollMs = metrics.lastPollDuration || 0;
+  $: lastPollMs = metrics.pollDuration || 0;
 
   $: agentActivity = metrics.agentActivity || { active: 0, hooked: 0, idle: 0 };
+
+  // Sparkline data
+  $: pollHistory = metrics.history?.pollDurations || [];
+  $: eventHistory = metrics.history?.eventVolume || [];
+
+  // Generate sparkline path from data
+  function sparklinePath(data, width, height) {
+    if (!data || data.length < 2) return '';
+    const max = Math.max(...data, 1);
+    const min = Math.min(...data, 0);
+    const range = max - min || 1;
+    const step = width / (data.length - 1);
+
+    const points = data.map((v, i) => {
+      const x = i * step;
+      const y = height - ((v - min) / range) * height;
+      return `${x},${y}`;
+    });
+
+    return `M${points.join(' L')}`;
+  }
 </script>
 
 <div class="metrics-dashboard">
@@ -51,6 +72,11 @@
         <div class="metric-value">{lastPollMs}ms</div>
         <div class="metric-label">Last Poll</div>
         <div class="metric-detail">response time</div>
+        {#if pollHistory.length > 1}
+          <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+            <path d={sparklinePath(pollHistory, 60, 20)} />
+          </svg>
+        {/if}
       </div>
 
       <div class="metric-card">
@@ -63,6 +89,11 @@
         <div class="metric-value">{totalEvents}</div>
         <div class="metric-label">Events</div>
         <div class="metric-detail">total processed</div>
+        {#if eventHistory.length > 1}
+          <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+            <path d={sparklinePath(eventHistory, 60, 20)} />
+          </svg>
+        {/if}
       </div>
     </div>
 
@@ -144,6 +175,20 @@
     font-size: 9px;
     color: #6e7681;
     margin-top: 2px;
+  }
+
+  .sparkline {
+    width: 100%;
+    height: 20px;
+    margin-top: 6px;
+  }
+
+  .sparkline path {
+    fill: none;
+    stroke: #58a6ff;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .agent-activity {

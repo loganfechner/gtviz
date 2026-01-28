@@ -116,6 +116,15 @@ export function connectWebSocket(onStatusChange) {
               mail: [msg.event, ...(s.mail || [])].slice(0, 50)
             }));
           }
+        } else if (msg.type === 'metrics') {
+          state.update(s => ({
+            ...s,
+            metrics: msg.data
+          }));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
         }
       } catch (err) {
         console.error('Failed to parse message:', err);

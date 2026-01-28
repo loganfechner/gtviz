@@ -10,7 +10,8 @@ export class StateManager extends EventEmitter {
       hooks: {},
       mail: [],
       events: [],
-      agentHistory: {}  // Track status changes per agent
+      agentHistory: {},  // Track status changes per agent
+      metrics: {}        // System metrics
     };
     this.previousStatus = {};  // For detecting changes
   }
@@ -82,5 +83,10 @@ export class StateManager extends EventEmitter {
       this.state.mail = this.state.mail.slice(0, 50);
     }
     this.emit('event', { type: 'mail', ...mail });
+  }
+
+  updateMetrics(metrics) {
+    this.state.metrics = metrics;
+    this.emit('metrics', metrics);
   }
 }

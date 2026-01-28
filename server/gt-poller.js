@@ -35,8 +35,9 @@ async function withRetry(fn, context = 'operation') {
 }
 
 export class GtPoller {
-  constructor(state) {
+  constructor(state, metrics = null) {
     this.state = state;
+    this.metrics = metrics;
     this.interval = null;
     this.pollIntervalMs = 5000;
     this.agentMonitor = new AgentMonitor();
@@ -58,6 +59,8 @@ export class GtPoller {
   }
 
   async poll() {
+    const startTime = Date.now();
+    let success = true;
     try {
       await Promise.all([
         this.pollRigs(),
@@ -66,7 +69,13 @@ export class GtPoller {
         this.pollHooks()
       ]);
     } catch (err) {
+      success = false;
       logger.error('poller', 'Poll cycle failed', { error: err.message });
+    } finally {
+      const duration = Date.now() - startTime;
+      if (this.metrics) {
+        this.metrics.recordPollDuration(duration, success);
+      }
     }
   }
 
@@ -138,6 +147,7 @@ export class GtPoller {
 
   async pollAgents() {
     const rigs = this.state.getRigs();
+    const allAgents = [];
     for (const rig of rigs) {
       try {
         const agents = await withRetry(
@@ -146,6 +156,7 @@ export class GtPoller {
         );
         this.state.updateAgents(rig, agents);
         this.failureCount[`agents-${rig}`] = 0;
+        allAgents.push(...agents);
       } catch (e) {
         const key = `agents-${rig}`;
         this.failureCount[key] = (this.failureCount[key] || 0) + 1;
@@ -154,6 +165,15 @@ export class GtPoller {
         }
         // Graceful degradation: keep last known agent state
       }
+    }
+
+    // Update agent activity metrics
+    if (this.metrics && allAgents.length > 0) {
+      const agentMap = {};
+      for (const agent of allAgents) {
+        agentMap[agent.name] = { status: agent.status, beadId: agent.hookBead };
+      }
+      this.metrics.updateAgentActivity(agentMap);
     }
   }
 
