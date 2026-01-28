@@ -3,3 +3,4 @@
 .logs/
 .beads/
 node_modules/
+dist/
