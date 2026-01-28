@@ -14,6 +14,7 @@ import { createAnomalyDetector } from './anomaly-detector.js';
 import { AlertingEngine } from './alerting-engine.js';
 import { RulesStore } from './rules-store.js';
 import { createLoadForecaster } from './load-forecaster.js';
+import { createTaskReplayManager } from './task-replay.js';
 import logger from './logger.js';
 import { METRICS_HISTORY_SIZE, METRICS_BROADCAST_MS } from './constants.js';
 
@@ -41,6 +42,7 @@ const loadForecaster = createLoadForecaster({
   forecastIntervalMs: 30000,  // Update forecasts every 30 seconds
   historyWindowMs: 3600000    // Use 1 hour of history
 });
+const taskReplayManager = createTaskReplayManager(state);
 
 // Track intervals for cleanup
 let metricsInterval = null;
@@ -205,6 +207,42 @@ state.on('errorPatterns', (errorPatterns) => {
   });
 });
 
+// Broadcast replay job events to all clients
+taskReplayManager.on('jobCreated', (job) => {
+  const message = JSON.stringify({ type: 'replayJobCreated', job });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+taskReplayManager.on('jobStarted', (job) => {
+  const message = JSON.stringify({ type: 'replayJobStarted', job });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+taskReplayManager.on('jobCompleted', (job) => {
+  const message = JSON.stringify({ type: 'replayJobCompleted', job });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+taskReplayManager.on('taskStarted', (job, task) => {
+  const message = JSON.stringify({ type: 'replayTaskStarted', jobId: job.id, task });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
+taskReplayManager.on('taskCompleted', (job, task) => {
+  const message = JSON.stringify({ type: 'replayTaskCompleted', jobId: job.id, task });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
 wss.on('connection', (ws) => {
   logger.info('websocket', 'Client connected');
   metrics.recordWsConnection();
@@ -336,6 +374,123 @@ app.get('/api/events/export', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="events-${new Date().toISOString().slice(0, 10)}.json"`);
     res.json(allEvents);
+  }
+});
+
+// ============================================================================
+// Task Export and Replay API
+// ============================================================================
+
+// Get completed tasks
+app.get('/api/tasks/completions', (req, res) => {
+  const { rig, agent, since, until, limit } = req.query;
+  try {
+    const tasks = taskReplayManager.getCompletedTasks({
+      rig,
+      agent,
+      since,
+      until,
+      limit: limit ? parseInt(limit, 10) : undefined
+    });
+    res.json({
+      count: tasks.length,
+      tasks
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export completed tasks as batch (JSON/CSV)
+app.get('/api/tasks/export', (req, res) => {
+  const { format = 'json', rig, agent, since, until, limit } = req.query;
+  try {
+    const result = taskReplayManager.exportTasks({
+      format,
+      rig,
+      agent,
+      since,
+      until,
+      limit: limit ? parseInt(limit, 10) : undefined
+    });
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a replay job
+app.post('/api/tasks/replay', (req, res) => {
+  try {
+    const { taskIds, name, options } = req.body;
+    const job = taskReplayManager.createReplayJob({ taskIds, name, options });
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get all replay jobs
+app.get('/api/tasks/replay', (req, res) => {
+  const { status, limit } = req.query;
+  try {
+    const jobs = taskReplayManager.getJobs({
+      status,
+      limit: limit ? parseInt(limit, 10) : undefined
+    });
+    res.json({
+      count: jobs.length,
+      jobs
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get replay job statistics
+app.get('/api/tasks/replay/stats', (req, res) => {
+  try {
+    const stats = taskReplayManager.getStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get a specific replay job
+app.get('/api/tasks/replay/:jobId', (req, res) => {
+  const job = taskReplayManager.getJob(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Replay job not found' });
+  }
+  res.json(job);
+});
+
+// Start a replay job
+app.post('/api/tasks/replay/:jobId/start', async (req, res) => {
+  try {
+    const job = await taskReplayManager.startReplayJob(req.params.jobId);
+    res.json(job);
+  } catch (err) {
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Cancel a replay job
+app.post('/api/tasks/replay/:jobId/cancel', (req, res) => {
+  try {
+    const job = taskReplayManager.cancelJob(req.params.jobId);
+    res.json(job);
+  } catch (err) {
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    res.status(400).json({ error: err.message });
   }
 });
 
