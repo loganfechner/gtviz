@@ -39,18 +39,19 @@ export class AgentMonitor {
     const agentPath = this.getAgentPath(rig, agentName, role);
 
     // Check if there's an active process
-    const hasProcess = await this.checkForProcess(agentPath, agentName);
+    const hasProcess = await this.checkForProcess(rig, agentName, role);
 
     // Check tmux session
     const hasTmux = await this.checkTmuxSession(rig, agentName, role);
 
     if (hasProcess || hasTmux) {
-      // Process exists - check if it's actively doing work
-      const isActive = await this.checkRecentActivity(agentPath);
-      return isActive ? 'running' : 'idle';
+      // Process/tmux exists = running (don't second-guess with activity check)
+      return 'running';
     }
 
-    return 'stopped';
+    // No process but check for recent activity (might be between commands)
+    const hasRecentActivity = await this.checkRecentActivity(agentPath);
+    return hasRecentActivity ? 'idle' : 'stopped';
   }
 
   /**
@@ -74,18 +75,23 @@ export class AgentMonitor {
   }
 
   /**
-   * Check for running claude process associated with agent directory
+   * Check for running claude process associated with agent
    */
-  async checkForProcess(agentPath, agentName) {
-    // Check for claude processes with this agent's directory in the command
-    const stdout = await safeExec(`pgrep -f "claude.*${agentPath}" 2>/dev/null || true`);
-    if (stdout.trim()) return true;
+  async checkForProcess(rig, agentName, role) {
+    // Use ps + grep instead of pgrep (better with special chars)
+    // Gas Town claude processes have patterns like:
+    // "[GAS TOWN] mayor" or "[GAS TOWN] gtviz/refinery"
+    const patterns = [
+      `GAS TOWN.*${rig}/${agentName}`,    // [GAS TOWN] gtviz/refinery
+      `GAS TOWN.*${agentName} <-`,         // [GAS TOWN] mayor <- human
+      `GAS TOWN.*${agentName}`,            // [GAS TOWN] deacon
+    ];
 
-    // Also check for processes with the agent name
-    const stdout2 = await safeExec(`pgrep -f "claude-code.*${agentName}" 2>/dev/null || true`);
-    if (stdout2.trim()) return true;
+    for (const pattern of patterns) {
+      const stdout = await safeExec(`ps aux | grep -E "${pattern}" | grep -v grep | head -1`);
+      if (stdout.trim()) return true;
+    }
 
-    // Skip lsof check - it's slow and often times out
     return false;
   }
 
@@ -93,20 +99,22 @@ export class AgentMonitor {
    * Check if agent has an active tmux session
    */
   async checkTmuxSession(rig, agentName, role) {
-    // Common tmux session naming patterns for Gas Town agents
+    // Gas Town tmux session naming patterns:
+    // gt-{rig}-{agent} (e.g., gt-gtviz-refinery)
+    // hq-{agent} (e.g., hq-mayor, hq-deacon)
+    // {rig}-{agent}
     const sessionPatterns = [
-      `${rig}-${agentName}`,
-      `${rig}_${agentName}`,
-      `${agentName}`,
-      `gt-${rig}-${agentName}`,
-      `${role}-${agentName}`
+      `gt-${rig}-${agentName}`,    // gt-gtviz-refinery
+      `hq-${agentName}`,            // hq-mayor, hq-deacon
+      `${rig}-${agentName}`,        // gtviz-refinery
+      `${agentName}`,               // just the agent name
     ];
 
     const stdout = await safeExec('tmux list-sessions -F "#{session_name}" 2>/dev/null || true');
-    const sessions = stdout.split('\n').filter(s => s.trim());
+    const sessions = stdout.split('\n').filter(s => s.trim()).map(s => s.toLowerCase());
 
     for (const pattern of sessionPatterns) {
-      if (sessions.some(s => s.toLowerCase().includes(pattern.toLowerCase()))) {
+      if (sessions.includes(pattern.toLowerCase())) {
         return true;
       }
     }
