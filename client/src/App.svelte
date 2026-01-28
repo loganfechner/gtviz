@@ -23,7 +23,7 @@
   let selectedAgent = null;
   let filters = { search: '', status: 'all', role: 'all' };
 
-  $: rigs = Object.keys($state.rigs || {});
+  $: rigs = Object.keys($state.rigs || {}).sort();
   $: if (rigs.length && !selectedRig) selectedRig = rigs[0];
   $: currentAgents = selectedRig ? ($state.agents?.[selectedRig] || []) : [];
   $: currentBeads = selectedRig ? ($state.beads?.[selectedRig] || []) : [];
