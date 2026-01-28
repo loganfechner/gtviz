@@ -6,6 +6,7 @@
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
+  import HistoricalTrends from './HistoricalTrends.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -56,6 +57,9 @@
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
+    <button class:active={activeTab === 'trends'} on:click={() => activeTab = 'trends'}>
+      Trends
+    </button>
   </nav>
 
   <div class="content">
@@ -71,6 +75,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'trends'}
+      <HistoricalTrends loading={!hasInitialData} />
     {/if}
   </div>
 </aside>

@@ -2,6 +2,7 @@
 .claude/
 .logs/
 .beads/
+data/
 node_modules/
 dist/
 client/dist/
