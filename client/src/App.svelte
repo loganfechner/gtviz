@@ -2,6 +2,11 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import Timeline from './components/Timeline.svelte';
+  import {
+    mode, MODE, displayState, replayState,
+    initTimeline, addEvent, handleTimelineState, goLive
+  } from './stores/timeline.js';
 
   let hooks = {};
   let connected = false;
@@ -45,12 +50,41 @@
       case 'initial':
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
+        // Load timeline data
+        loadTimelineData();
         break;
 
       case 'hooks:updated':
+        // Update live state
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
+        // Add event to timeline
+        addEvent(message);
         break;
+
+      case 'timeline:state':
+        // Handle historical state response
+        handleTimelineState(message.data);
+        break;
+
+      case 'timeline:bounds':
+        // Update timeline bounds
+        initTimeline([], message.data.bounds, message.data.markers);
+        break;
+    }
+  }
+
+  async function loadTimelineData() {
+    try {
+      const response = await fetch('/api/timeline/events/all');
+      const data = await response.json();
+      initTimeline(data.events, data.bounds, data.events.map(e => ({
+        timestamp: e.timestamp,
+        type: e.type,
+        hasChanges: e.data?.changes?.length > 0
+      })));
+    } catch (error) {
+      console.error('Failed to load timeline data:', error);
     }
   }
 
@@ -70,7 +104,11 @@
     }
   });
 
-  $: agentList = Object.values(hooks).sort((a, b) => {
+  // Use replay state hooks when in replay mode, otherwise use live hooks
+  $: displayHooks = $displayState?.hooks || hooks;
+  $: isReplayMode = $mode === MODE.REPLAY;
+
+  $: agentList = Object.values(displayHooks).sort((a, b) => {
     // Sort by role priority: witness, refinery, polecats
     const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
     const orderA = roleOrder[a.role] ?? 3;
@@ -83,11 +121,14 @@
 <main>
   <header>
     <h1>gtviz</h1>
+    {#if isReplayMode}
+      <span class="replay-badge">REPLAY</span>
+    {/if}
     <div class="status">
       <span class="indicator" class:connected></span>
       {connected ? 'Connected' : 'Disconnected'}
     </div>
-    <button on:click={requestPoll} disabled={!connected}>
+    <button on:click={requestPoll} disabled={!connected || isReplayMode}>
       Refresh
     </button>
   </header>
@@ -107,9 +148,11 @@
     </div>
 
     <aside class="sidebar">
-      <HookStatusPanel {hooks} {lastUpdated} />
+      <HookStatusPanel hooks={displayHooks} {lastUpdated} />
     </aside>
   </div>
+
+  <Timeline {ws} />
 </main>
 
 <style>
@@ -146,6 +189,22 @@
     color: #e94560;
     font-weight: 700;
     letter-spacing: 0.05em;
+  }
+
+  .replay-badge {
+    padding: 0.25rem 0.5rem;
+    background: #fbbf24;
+    color: #000;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    border-radius: 3px;
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
   }
 
   .status {

@@ -66,6 +66,25 @@ wss.on('connection', (ws) => {
         // Client requests immediate poll
         const hooks = await hookPoller.pollNow();
         stateManager.updateHooks(hooks);
+      } else if (message.type === 'timeline:getState') {
+        // Client requests historical state at specific time
+        const state = stateManager.getStateAtTime(message.timestamp);
+        ws.send(JSON.stringify({
+          type: 'timeline:state',
+          data: state,
+          requestedTime: message.timestamp,
+          timestamp: new Date().toISOString()
+        }));
+      } else if (message.type === 'timeline:getBounds') {
+        // Client requests timeline bounds
+        ws.send(JSON.stringify({
+          type: 'timeline:bounds',
+          data: {
+            bounds: stateManager.getTimelineBounds(),
+            markers: stateManager.getEventMarkers()
+          },
+          timestamp: new Date().toISOString()
+        }));
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
@@ -124,19 +143,81 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Timeline API endpoints
+
+// API: Get timeline bounds and event markers
+app.get('/api/timeline', (req, res) => {
+  res.json({
+    bounds: stateManager.getTimelineBounds(),
+    markers: stateManager.getEventMarkers(),
+    stats: stateManager.getBufferStats(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get historical state at specific time
+app.get('/api/timeline/state/:timestamp', (req, res) => {
+  try {
+    const timestamp = decodeURIComponent(req.params.timestamp);
+    const state = stateManager.getStateAtTime(timestamp);
+    res.json({
+      state,
+      requestedTime: timestamp,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Get events within time range
+app.get('/api/timeline/events', (req, res) => {
+  try {
+    const { start, end } = req.query;
+    if (!start || !end) {
+      return res.status(400).json({ error: 'start and end query params required' });
+    }
+    const events = stateManager.getEventsBetween(start, end);
+    res.json({
+      events,
+      count: events.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Get all events (for initial load)
+app.get('/api/timeline/events/all', (req, res) => {
+  const events = stateManager.getAllEvents();
+  res.json({
+    events,
+    count: events.length,
+    bounds: stateManager.getTimelineBounds(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Catch-all for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`gtviz server running on http://localhost:${PORT}`);
   console.log(`Monitoring rig: ${RIG_PATH}`);
   console.log(`Poll interval: ${POLL_INTERVAL}ms`);
+  console.log(`Timeline buffer: 3 hour rolling window`);
 
   // Start polling
   hookPoller.start();
+
+  // Record initial snapshot after first poll completes
+  const initialHooks = await hookPoller.pollNow();
+  stateManager.updateHooks(initialHooks);
+  stateManager.recordSnapshot();
 });
 
 // Graceful shutdown
