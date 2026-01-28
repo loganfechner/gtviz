@@ -3,6 +3,7 @@
   import EventLog from './EventLog.svelte';
   import HookStatus from './HookStatus.svelte';
   import AgentTimeline from './AgentTimeline.svelte';
+  import MetricsDashboard from './MetricsDashboard.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -11,6 +12,7 @@
   export let agents = [];
   export let agentHistory = {};
   export let selectedAgent = null;
+  export let metrics = {};
 
   let activeTab = 'events';
 
@@ -33,6 +35,9 @@
     <button class:active={activeTab === 'timeline'} on:click={() => activeTab = 'timeline'}>
       Timeline
     </button>
+    <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
+      Metrics
+    </button>
   </nav>
 
   <div class="content">
@@ -44,6 +49,8 @@
       <HookStatus {hooks} />
     {:else if activeTab === 'timeline'}
       <AgentTimeline agent={selectedAgent} history={currentAgentHistory} />
+    {:else if activeTab === 'metrics'}
+      <MetricsDashboard {metrics} />
     {/if}
   </div>
 </aside>

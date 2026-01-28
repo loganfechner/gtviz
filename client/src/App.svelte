@@ -29,6 +29,7 @@
   $: currentBeads = selectedRig ? ($state.beads?.[selectedRig] || []) : [];
   $: currentHooks = selectedRig ? ($state.hooks?.[selectedRig] || {}) : {};
   $: agentHistory = $state.agentHistory || {};
+  $: metrics = $state.metrics || {};
 
   // Apply filters to agents
   $: filteredAgents = currentAgents.filter(agent => {
@@ -89,6 +90,7 @@
       agents={currentAgents}
       {agentHistory}
       {selectedAgent}
+      {metrics}
     />
   </main>
 </div>
