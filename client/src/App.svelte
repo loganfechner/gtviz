@@ -7,11 +7,13 @@
   import MailModal from './components/MailModal.svelte';
   import EventDetailModal from './components/EventDetailModal.svelte';
   import Spinner from './components/Spinner.svelte';
-  import { connectWebSocket, state, events, errors, errorPatterns, connectionStatus, isStale } from './lib/websocket.js';
+  import { connectWebSocket, state, events, errors, errorPatterns, connectionStatus, isStale, presence } from './lib/websocket.js';
+  import PresencePanel from './components/PresencePanel.svelte';
 
   let selectedRig = null;
   let selectedMail = null;
   let selectedEvent = null;
+  let showPresencePanel = false;
 
   onMount(() => {
     connectWebSocket((isConnected) => {
@@ -19,6 +21,16 @@
     });
 
     // Keyboard shortcuts
+    function handleClickOutside(e) {
+      // Close presence panel if clicking outside of it
+      if (showPresencePanel) {
+        const presenceWrapper = document.querySelector('.presence-indicator-wrapper');
+        if (presenceWrapper && !presenceWrapper.contains(e.target)) {
+          showPresencePanel = false;
+        }
+      }
+    }
+
     function handleKeydown(e) {
       // Ignore if typing in input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -60,7 +72,11 @@
     }
 
     window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    window.addEventListener('click', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('click', handleClickOutside);
+    };
   });
 
   $: connected = $connectionStatus.connected;
@@ -120,6 +136,17 @@
   function closeEventModal() {
     selectedEvent = null;
   }
+
+  function handlePresenceNavigate(e) {
+    const { rig, agent } = e.detail;
+    if (rig) selectedRig = rig;
+    if (agent) {
+      // Find agent in the rig
+      const agents = $state.agents?.[rig] || [];
+      const found = agents.find(a => a.name === agent);
+      if (found) selectedAgent = found;
+    }
+  }
 </script>
 
 <div class="app">
@@ -145,6 +172,25 @@
         {/if}
       </div>
     {/if}
+    <div class="presence-indicator-wrapper">
+      <button
+        class="presence-indicator"
+        on:click={() => showPresencePanel = !showPresencePanel}
+        class:active={showPresencePanel}
+      >
+        <span class="presence-dot"></span>
+        {$presence.users.length} online
+      </button>
+      {#if showPresencePanel}
+        <div class="presence-dropdown">
+          <PresencePanel
+            currentRig={selectedRig}
+            currentAgent={selectedAgent}
+            on:navigate={handlePresenceNavigate}
+          />
+        </div>
+      {/if}
+    </div>
     <div class="status" class:connected class:stale={$isStale} class:reconnecting>
       {#if reconnecting || !connected}
         <Spinner size={12} />
@@ -307,6 +353,55 @@
   .status.reconnecting {
     background: #58a6ff33;
     color: #58a6ff;
+  }
+
+  .presence-indicator-wrapper {
+    position: relative;
+    margin-left: auto;
+  }
+
+  .presence-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #8b949e;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .presence-indicator:hover {
+    background: #30363d;
+    color: #c9d1d9;
+  }
+
+  .presence-indicator.active {
+    background: #30363d;
+    border-color: #58a6ff;
+    color: #c9d1d9;
+  }
+
+  .presence-dot {
+    width: 8px;
+    height: 8px;
+    background: #3fb950;
+    border-radius: 50%;
+  }
+
+  .presence-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 280px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 100;
   }
 
   main {
