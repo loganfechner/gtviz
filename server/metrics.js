@@ -6,12 +6,33 @@
  * - Update frequency
  * - Agent activity rates
  * - Event volume over time
+ *
+ * @module metrics
+ */
+
+/**
+ * @typedef {import('./types.js').Metrics} Metrics
+ * @typedef {import('./types.js').AgentActivity} AgentActivity
+ * @typedef {import('./types.js').MetricsHistory} MetricsHistory
+ * @typedef {import('./types.js').MetricsBufferSizes} MetricsBufferSizes
+ */
+
+/**
+ * @typedef {Object} MetricsCollector
+ * @property {function(number, boolean=): void} recordPollDuration - Record a poll duration
+ * @property {function(number): void} recordStateChange - Record state changes
+ * @property {function(): void} recordWsConnection - Record WebSocket connection
+ * @property {function(): void} recordWsDisconnection - Record WebSocket disconnection
+ * @property {function(): void} recordWsMessage - Record WebSocket message
+ * @property {function(Object<string, {status: string, beadId: string|null}>): void} updateAgentActivity - Update agent activity
+ * @property {function(): Metrics} getMetrics - Get current metrics snapshot
+ * @property {function(): void} reset - Reset all metrics
  */
 
 /**
  * Create a metrics collector
- * @param {number} historySize - Number of data points to retain (default: 60 for 1 hour at 1/min)
- * @returns {Object} Metrics collector
+ * @param {number} [historySize=60] - Number of data points to retain (default: 60 for 1 hour at 1/min)
+ * @returns {MetricsCollector} Metrics collector instance
  */
 export function createMetricsCollector(historySize = 60) {
   // Circular buffers for historical data

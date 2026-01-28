@@ -5,12 +5,20 @@
  * - Agent path and role
  * - Hooked bead (if any)
  * - Attached molecule (if any)
+ *
+ * @module hook-parser
+ */
+
+/**
+ * @typedef {import('./types.js').HookStatus} HookStatus
+ * @typedef {import('./types.js').HookSummary} HookSummary
+ * @typedef {import('./types.js').AgentRole} AgentRole
  */
 
 /**
  * Parse gt hook output into structured data
  * @param {string} output - Raw output from `gt hook` command
- * @returns {Object} Parsed hook status
+ * @returns {HookStatus} Parsed hook status
  */
 export function parseHookOutput(output) {
   const result = {
@@ -81,8 +89,8 @@ export function parseHookOutput(output) {
 
 /**
  * Get hook status summary for display
- * @param {Object} hookStatus - Parsed hook status
- * @returns {Object} Summary for display
+ * @param {HookStatus} hookStatus - Parsed hook status
+ * @returns {HookSummary} Summary for display
  */
 export function getHookSummary(hookStatus) {
   if (!hookStatus.hooked) {

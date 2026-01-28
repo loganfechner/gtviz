@@ -1,11 +1,35 @@
+/**
+ * GT Poller
+ *
+ * Polls Gas Town CLI commands to gather state updates:
+ * - Rigs: List of active rigs
+ * - Agents: Status of agents per rig
+ * - Beads: Issues/tasks per rig
+ * - Hooks: Current work assignments
+ *
+ * @module gt-poller
+ */
+
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentMonitor } from './agent-monitor.js';
 import logger from './logger.js';
 
+/**
+ * @typedef {import('./types.js').Agent} Agent
+ * @typedef {import('./types.js').Bead} Bead
+ * @typedef {import('./types.js').BeadStatus} BeadStatus
+ * @typedef {import('./types.js').BeadPriority} BeadPriority
+ * @typedef {import('./types.js').Rig} Rig
+ * @typedef {import('./types.js').HookData} HookData
+ * @typedef {import('./types.js').RetryConfig} RetryConfig
+ * @typedef {import('./state.js').StateManager} StateManager
+ * @typedef {import('./metrics.js').MetricsCollector} MetricsCollector
+ */
+
 const execAsync = promisify(exec);
 
-// Retry configuration
+/** @type {RetryConfig} */
 const RETRY_CONFIG = {
   maxRetries: 3,
   initialDelayMs: 100,
@@ -15,6 +39,11 @@ const RETRY_CONFIG = {
 
 /**
  * Execute with exponential backoff retry
+ * @template T
+ * @param {function(): Promise<T>} fn - Function to execute
+ * @param {string} [context='operation'] - Context for logging
+ * @returns {Promise<T>} Result of function
+ * @throws {Error} Last error if all retries fail
  */
 async function withRetry(fn, context = 'operation') {
   let lastError;
@@ -34,25 +63,48 @@ async function withRetry(fn, context = 'operation') {
   throw lastError;
 }
 
+/**
+ * GtPoller - Polls Gas Town CLI for state updates
+ */
 export class GtPoller {
+  /**
+   * Create a new GtPoller
+   * @param {StateManager} state - State manager instance
+   * @param {MetricsCollector|null} [metrics=null] - Metrics collector instance
+   */
   constructor(state, metrics = null) {
+    /** @type {StateManager} */
     this.state = state;
+    /** @type {MetricsCollector|null} */
     this.metrics = metrics;
+    /** @type {NodeJS.Timeout|null} */
     this.interval = null;
+    /** @type {number} */
     this.pollIntervalMs = 5000;
+    /** @type {AgentMonitor} */
     this.agentMonitor = new AgentMonitor();
+    /** @type {Object<string, number>} */
     this.lastSuccessfulPoll = {};
+    /** @type {Object<string, number>} */
     this.failureCount = {};
-    this.taskStartTimes = {};  // Track when tasks/beads were started
-    this.previousBeadStatus = {}; // Track bead status changes
+    /** @type {Object<string, number>} */
+    this.taskStartTimes = {};
+    /** @type {Object<string, BeadStatus>} */
+    this.previousBeadStatus = {};
   }
 
+  /**
+   * Start the polling loop
+   */
   start() {
     this.poll();
     this.interval = setInterval(() => this.poll(), this.pollIntervalMs);
     logger.info('poller', 'GT poller started');
   }
 
+  /**
+   * Stop the polling loop
+   */
   stop() {
     if (this.interval) {
       clearInterval(this.interval);
@@ -60,6 +112,10 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Execute a single poll cycle
+   * @returns {Promise<void>}
+   */
   async poll() {
     const startTime = Date.now();
     let success = true;
@@ -81,6 +137,10 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Poll for rig information
+   * @returns {Promise<void>}
+   */
   async pollRigs() {
     try {
       const rigs = await withRetry(async () => {
@@ -110,6 +170,11 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse rig list output (JSON or text)
+   * @param {string} output - Raw CLI output
+   * @returns {Object<string, Rig>} Rigs by name
+   */
   parseRigList(output) {
     try {
       return JSON.parse(output);
@@ -118,6 +183,11 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse text-format rig list output
+   * @param {string} output - Raw text output
+   * @returns {Object<string, Rig>} Rigs by name
+   */
   parseRigListText(output) {
     const rigs = {};
     const lines = output.split('\n');
@@ -157,6 +227,10 @@ export class GtPoller {
     return rigs;
   }
 
+  /**
+   * Poll for agent information across all rigs
+   * @returns {Promise<void>}
+   */
   async pollAgents() {
     const rigs = this.state.getRigs();
     const allAgents = [];
@@ -199,7 +273,13 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Get agents from filesystem directory structure
+   * @param {string} rig - Rig name
+   * @returns {Promise<Agent[]>} Array of agents with status
+   */
   async getAgentsFromDir(rig) {
+    /** @type {Agent[]} */
     const agents = [];
     const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
     const rigPath = `${gtDir}/${rig}`;
@@ -253,7 +333,14 @@ export class GtPoller {
     return agentsWithStatus;
   }
 
+  /**
+   * Parse agent list text output
+   * @param {string} output - Raw text output
+   * @param {string} rig - Rig name
+   * @returns {Agent[]} Array of agents
+   */
   parseAgents(output, rig) {
+    /** @type {Agent[]} */
     const agents = [];
     const lines = output.split('\n').filter(l => l.trim());
     for (const line of lines) {
@@ -261,15 +348,19 @@ export class GtPoller {
       if (match && match[1]) {
         agents.push({
           name: match[1],
-          role: match[2] || 'agent',
+          role: /** @type {import('./types.js').AgentRole} */ (match[2] || 'agent'),
           rig: rig,
-          status: match[3] || 'unknown'
+          status: /** @type {import('./types.js').AgentStatusValue} */ (match[3] || 'unknown')
         });
       }
     }
     return agents;
   }
 
+  /**
+   * Poll for bead information across all rigs
+   * @returns {Promise<void>}
+   */
   async pollBeads() {
     const rigs = this.state.getRigs();
     const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
@@ -321,6 +412,11 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Track task completions and update agent stats
+   * @param {string} rig - Rig name
+   * @param {Bead[]} beads - Array of beads
+   */
   trackTaskCompletions(rig, beads) {
     const now = Date.now();
 
@@ -373,10 +469,14 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse bead list output (JSON or text)
+   * @param {string} output - Raw CLI output
+   * @returns {Bead[]} Array of beads
+   */
   parseBeads(output) {
     try {
       const data = JSON.parse(output);
-      // Normalize JSON beads to include all expected fields
       if (Array.isArray(data)) {
         return data.map(bead => ({
           id: bead.id,
@@ -401,15 +501,20 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse text-format bead list output
+   * @param {string} output - Raw text output
+   * @returns {Bead[]} Array of beads
+   */
   parseBeadsText(output) {
+    /** @type {Bead[]} */
     const beads = [];
     const lines = output.split('\n').filter(l => l.trim());
     for (const line of lines) {
-      // Parse: status-symbol id · title [● priority · STATUS]
-      // Example: ? gt-abc123 · Add feature [● P2 · HOOKED]
       const fullMatch = line.match(/^([?○●✓✗])\s+(\S+)\s*·?\s*(.+?)(?:\s+\[([^\]]+)\])?$/);
       if (fullMatch) {
         const [, symbol, id, title, meta] = fullMatch;
+        /** @type {Bead} */
         const bead = {
           id,
           title: title.trim(),
@@ -452,6 +557,11 @@ export class GtPoller {
     return beads;
   }
 
+  /**
+   * Convert status symbol to status string
+   * @param {string} symbol - Status symbol
+   * @returns {BeadStatus} Status string
+   */
   parseStatusFromSymbol(symbol) {
     switch (symbol) {
       case '?': return 'open';
@@ -463,6 +573,12 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Fetch detailed information for a specific bead
+   * @param {string} beadId - Bead ID
+   * @param {string} cwd - Working directory for command
+   * @returns {Promise<Bead|null>} Bead details or null on error
+   */
   async fetchBeadDetails(beadId, cwd) {
     try {
       const { stdout } = await execAsync(`bd show ${beadId} --json 2>/dev/null || bd show ${beadId}`, {
@@ -475,8 +591,13 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse bead details from CLI output
+   * @param {string} output - Raw CLI output
+   * @param {string} beadId - Bead ID for fallback
+   * @returns {Bead} Parsed bead details
+   */
   parseBeadDetails(output, beadId) {
-    // Try JSON first
     try {
       const data = JSON.parse(output);
       return {
@@ -585,6 +706,11 @@ export class GtPoller {
     return details;
   }
 
+  /**
+   * Normalize priority value to standard format
+   * @param {string|null|undefined} p - Raw priority value
+   * @returns {BeadPriority} Normalized priority
+   */
   normalizePriority(p) {
     if (!p) return null;
     const lower = p.toLowerCase();
@@ -592,9 +718,13 @@ export class GtPoller {
     if (lower === 'p2' || lower === 'high') return 'high';
     if (lower === 'p3' || lower === 'normal') return 'normal';
     if (lower === 'p4' || lower === 'low') return 'low';
-    return lower;
+    return /** @type {BeadPriority} */ (lower);
   }
 
+  /**
+   * Poll for hook information across all rigs
+   * @returns {Promise<void>}
+   */
   async pollHooks() {
     const rigs = this.state.getRigs();
     const gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
@@ -670,8 +800,13 @@ export class GtPoller {
     }
   }
 
+  /**
+   * Parse hook output from CLI
+   * @param {string} output - Raw CLI output
+   * @param {string} agent - Agent name
+   * @returns {HookData|null} Parsed hook data or null if no hook
+   */
   parseHookOutput(output, agent) {
-    // Try JSON first
     try {
       const data = JSON.parse(output);
       if (data.bead || data.hooked) {
