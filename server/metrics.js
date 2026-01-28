@@ -29,6 +29,15 @@ export function createMetricsCollector(historySize = 60) {
   let totalPolls = 0;
   let totalEvents = 0;
 
+  // Poll success/failure tracking
+  let successfulPolls = 0;
+  let failedPolls = 0;
+
+  // WebSocket tracking
+  let wsConnections = 0;
+  let totalWsConnections = 0;
+  let totalWsMessages = 0;
+
   // Agent activity tracking
   const agentActivity = {
     active: 0,
@@ -64,10 +73,16 @@ export function createMetricsCollector(historySize = 60) {
     /**
      * Record a poll duration
      * @param {number} durationMs - Time taken for poll in milliseconds
+     * @param {boolean} success - Whether the poll succeeded
      */
-    recordPollDuration(durationMs) {
+    recordPollDuration(durationMs, success = true) {
       lastPollDuration = durationMs;
       totalPolls++;
+      if (success) {
+        successfulPolls++;
+      } else {
+        failedPolls++;
+      }
       addToBuffer(pollDurations, durationMs);
       maybeRotateInterval();
     },
@@ -80,6 +95,28 @@ export function createMetricsCollector(historySize = 60) {
       currentIntervalEvents += changeCount;
       totalEvents += changeCount;
       maybeRotateInterval();
+    },
+
+    /**
+     * Record a WebSocket connection
+     */
+    recordWsConnection() {
+      wsConnections++;
+      totalWsConnections++;
+    },
+
+    /**
+     * Record a WebSocket disconnection
+     */
+    recordWsDisconnection() {
+      wsConnections--;
+    },
+
+    /**
+     * Record a WebSocket message received
+     */
+    recordWsMessage() {
+      totalWsMessages++;
     },
 
     /**
@@ -123,6 +160,11 @@ export function createMetricsCollector(historySize = 60) {
         ? Math.round(recentEvents.reduce((a, b) => a + b, 0) / recentEvents.length * 10) / 10
         : 0;
 
+      // Calculate success rate
+      const successRate = totalPolls > 0
+        ? Math.round((successfulPolls / totalPolls) * 1000) / 10
+        : 100;
+
       return {
         // Real-time values
         pollDuration: lastPollDuration,
@@ -130,6 +172,23 @@ export function createMetricsCollector(historySize = 60) {
         updateFrequency,
         totalPolls,
         totalEvents,
+
+        // Poll success/failure
+        successfulPolls,
+        failedPolls,
+        successRate,
+
+        // WebSocket metrics
+        wsConnections,
+        totalWsConnections,
+        totalWsMessages,
+
+        // Buffer sizes
+        bufferSizes: {
+          pollDurations: pollDurations.length,
+          eventVolume: eventVolume.length,
+          currentIntervalEvents
+        },
 
         // Agent activity
         agentActivity: { ...agentActivity },
@@ -155,6 +214,11 @@ export function createMetricsCollector(historySize = 60) {
       lastPollDuration = 0;
       totalPolls = 0;
       totalEvents = 0;
+      successfulPolls = 0;
+      failedPolls = 0;
+      wsConnections = 0;
+      totalWsConnections = 0;
+      totalWsMessages = 0;
       agentActivity.active = 0;
       agentActivity.hooked = 0;
       agentActivity.idle = 0;
