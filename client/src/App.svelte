@@ -3,6 +3,7 @@
   import NetworkGraph from './components/NetworkGraph.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import FilterBar from './components/FilterBar.svelte';
+  import Toast from './components/Toast.svelte';
   import { connectWebSocket, state, events, connectionStatus } from './lib/websocket.js';
 
   let selectedRig = null;
@@ -137,6 +138,7 @@
       {metrics}
     />
   </main>
+  <Toast />
 </div>
 
 <style>

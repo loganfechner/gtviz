@@ -1,4 +1,6 @@
 <script>
+  import CopyButton from './CopyButton.svelte';
+
   export let agent;
   export let color = '#8b949e';
 
@@ -28,7 +30,10 @@
     <span class="role">{agent.role}</span>
     <span class="status {getStatusClass(agent.status)}">{agent.status || 'unknown'}</span>
   </div>
-  <div class="name">{agent.name}</div>
+  <div class="name">
+    {agent.name}
+    <CopyButton value={agent.name} label="Copied agent name" />
+  </div>
   {#if agent.task}
     <div class="task">{agent.task}</div>
   {/if}

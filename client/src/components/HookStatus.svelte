@@ -1,4 +1,6 @@
 <script>
+  import CopyButton from './CopyButton.svelte';
+
   export let hooks = {};
 
   $: hookEntries = Object.entries(hooks);
@@ -20,13 +22,19 @@
       <div class="hook">
         <div class="hook-header">
           <span class="hook-agent">{agent}</span>
+          <CopyButton value={agent} label="Copied agent name" />
           {#if hook?.autonomousMode}
             <span class="badge autonomous">AUTO</span>
           {/if}
         </div>
         {#if hook}
           <div class="hook-content">
-            <div class="hook-bead">{hook.bead || 'Unknown bead'}</div>
+            <div class="hook-bead">
+              {hook.bead || 'Unknown bead'}
+              {#if hook.bead}
+                <CopyButton value={hook.bead} label="Copied bead ID" />
+              {/if}
+            </div>
             {#if hook.title}
               <div class="hook-title">{hook.title}</div>
             {/if}

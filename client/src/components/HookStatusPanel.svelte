@@ -1,4 +1,6 @@
 <script>
+  import CopyButton from './CopyButton.svelte';
+
   export let hooks = {};
   export let lastUpdated = null;
 
@@ -47,10 +49,12 @@
         <div class="hook-agent">
           <span class="hook-status-dot" class:active={hook.status === 'active'} class:hooked={hook.beadId && hook.status !== 'active'}></span>
           <span class="agent-name">{hook.agent}</span>
+          <CopyButton value={hook.agent} label="Copied agent name" />
         </div>
         {#if hook.beadId}
           <div class="hook-bead">
             <span class="bead-id">{hook.beadId}</span>
+            <CopyButton value={hook.beadId} label="Copied bead ID" />
           </div>
         {:else}
           <div class="hook-empty">idle</div>

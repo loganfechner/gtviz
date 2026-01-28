@@ -1,4 +1,6 @@
 <script>
+  import CopyButton from './CopyButton.svelte';
+
   export let beads = [];
 
   function getStatusColor(status) {
@@ -21,6 +23,7 @@
       <div class="bead">
         <div class="bead-header">
           <span class="bead-id">{bead.id}</span>
+          <CopyButton value={bead.id} label="Copied bead ID" />
           <span class="bead-status" style="color: {getStatusColor(bead.status)}">
             {bead.status}
           </span>
