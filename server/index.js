@@ -8,6 +8,7 @@ import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
 import { createHealthCalculator } from './health-calculator.js';
+import { createMetricsStorage } from './metrics-storage.js';
 import { LogsWatcher } from './logs-watcher.js';
 import { createAnomalyDetector } from './anomaly-detector.js';
 import { AlertingEngine } from './alerting-engine.js';
@@ -25,6 +26,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const state = new StateManager();
 const metrics = createMetricsCollector(METRICS_HISTORY_SIZE);
 const healthCalculator = createHealthCalculator(METRICS_HISTORY_SIZE);
+const metricsStorage = createMetricsStorage();
 const anomalyDetector = createAnomalyDetector({
   evaluationIntervalMs: 5000,
   alertCooldownMs: 60000
@@ -140,6 +142,9 @@ anomalyDetector.on('alertDismissed', (alert) => {
   });
 });
 
+// Start metrics persistence
+metricsStorage.start();
+
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
   const message = JSON.stringify({ type: 'state', data });
@@ -198,6 +203,7 @@ wss.on('connection', (ws) => {
 });
 
 // Broadcast metrics, health score, and feed to anomaly detector
+let metricsRecordCounter = 0;
 metricsInterval = setInterval(() => {
   const metricsData = metrics.getMetrics();
   const healthScore = healthCalculator.calculate(metricsData);
@@ -215,6 +221,13 @@ metricsInterval = setInterval(() => {
   wss.clients.forEach(client => {
     if (client.readyState === 1) client.send(message);
   });
+
+  // Record to persistent storage every minute (12 * 5 seconds)
+  metricsRecordCounter++;
+  if (metricsRecordCounter >= 12) {
+    metricsStorage.recordMetrics(metricsData);
+    metricsRecordCounter = 0;
+  }
 }, METRICS_BROADCAST_MS);
 
 // Feed log events to anomaly detector
@@ -422,6 +435,74 @@ app.post('/api/rules/test', (req, res) => {
     res.json(results);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Historical metrics API endpoints
+app.get('/api/metrics/history', (req, res) => {
+  const { start, end, interval = 'auto' } = req.query;
+
+  // Default to last 24 hours if no range specified
+  const endTime = end ? new Date(end) : new Date();
+  const startTime = start ? new Date(start) : new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+
+  try {
+    const data = metricsStorage.queryRange(startTime, endTime, interval);
+    res.json({
+      period: {
+        start: startTime.toISOString(),
+        end: endTime.toISOString(),
+        interval
+      },
+      data
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/metrics/summary', (req, res) => {
+  const { start, end } = req.query;
+
+  // Default to last 24 hours
+  const endTime = end ? new Date(end) : new Date();
+  const startTime = start ? new Date(start) : new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+
+  try {
+    const summary = metricsStorage.getSummary(startTime, endTime);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/metrics/agents', (req, res) => {
+  const { agent = 'all', start, end } = req.query;
+
+  // Default to last 7 days for agent efficiency
+  const endTime = end ? new Date(end) : new Date();
+  const startTime = start ? new Date(start) : new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  try {
+    const efficiency = metricsStorage.getAgentEfficiency(agent, startTime, endTime);
+    res.json({
+      period: {
+        start: startTime.toISOString(),
+        end: endTime.toISOString()
+      },
+      agents: efficiency
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/metrics/storage', (req, res) => {
+  try {
+    const stats = metricsStorage.getStorageStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

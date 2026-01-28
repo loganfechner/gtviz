@@ -15,6 +15,7 @@
   import CommunicationHeatmap from './CommunicationHeatmap.svelte';
   import AlertingPanel from './AlertingPanel.svelte';
   import ErrorPatternsPanel from './ErrorPatternsPanel.svelte';
+  import HistoricalTrends from './HistoricalTrends.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -121,6 +122,9 @@
     <button class:active={activeTab === 'rules'} on:click={() => activeTab = 'rules'}>
       Rules
     </button>
+    <button class:active={activeTab === 'trends'} on:click={() => activeTab = 'trends'}>
+      Trends
+    </button>
   </nav>
 
   <div class="content" class:graph-content={activeTab === 'deps'}>
@@ -154,6 +158,8 @@
       <AgentComparisonDashboard {agents} {agentStats} {agentHistory} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'rules'}
       <AlertingPanel loading={!hasInitialData} />
+    {:else if activeTab === 'trends'}
+      <HistoricalTrends loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
