@@ -10,7 +10,9 @@ export class StateManager extends EventEmitter {
       hooks: {},
       mail: [],
       events: [],
-      agentHistory: {}  // Track status changes per agent
+      agentHistory: {},  // Track status changes per agent
+      logs: [],          // Log entries from town.log, daemon.log
+      agentStats: {}     // Performance stats per agent: completions, durations
     };
     this.previousStatus = {};  // For detecting changes
   }
@@ -82,5 +84,48 @@ export class StateManager extends EventEmitter {
       this.state.mail = this.state.mail.slice(0, 50);
     }
     this.emit('event', { type: 'mail', ...mail });
+  }
+
+  addLog(log) {
+    this.state.logs.unshift(log);
+    if (this.state.logs.length > 500) {
+      this.state.logs = this.state.logs.slice(0, 500);
+    }
+    this.emit('event', { type: 'log', ...log });
+  }
+
+  updateAgentStats(agentKey, stats) {
+    if (!this.state.agentStats[agentKey]) {
+      this.state.agentStats[agentKey] = {
+        completions: [],
+        totalCompleted: 0,
+        avgDuration: 0
+      };
+    }
+    const agentStats = this.state.agentStats[agentKey];
+
+    if (stats.completion) {
+      agentStats.completions.unshift(stats.completion);
+      if (agentStats.completions.length > 50) {
+        agentStats.completions = agentStats.completions.slice(0, 50);
+      }
+      agentStats.totalCompleted = agentStats.completions.length;
+
+      // Calculate average duration
+      const durations = agentStats.completions
+        .filter(c => c.duration)
+        .map(c => c.duration);
+      if (durations.length > 0) {
+        agentStats.avgDuration = Math.round(
+          durations.reduce((a, b) => a + b, 0) / durations.length
+        );
+      }
+    }
+
+    this.emit('update', this.state);
+  }
+
+  getAgentStats(agentKey) {
+    return this.state.agentStats[agentKey] || null;
   }
 }

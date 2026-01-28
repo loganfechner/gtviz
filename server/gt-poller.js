@@ -42,6 +42,8 @@ export class GtPoller {
     this.agentMonitor = new AgentMonitor();
     this.lastSuccessfulPoll = {};
     this.failureCount = {};
+    this.taskStartTimes = {};  // Track when tasks/beads were started
+    this.previousBeadStatus = {}; // Track bead status changes
   }
 
   start() {
@@ -250,6 +252,9 @@ export class GtPoller {
           }
         }, `pollBeads(${rig})`);
 
+        // Track task completions and durations
+        this.trackTaskCompletions(rig, beads);
+
         this.state.updateBeads(rig, beads);
         this.failureCount[`beads-${rig}`] = 0;
       } catch (e) {
@@ -260,6 +265,58 @@ export class GtPoller {
         }
         // Graceful degradation: keep last known bead state
       }
+    }
+  }
+
+  trackTaskCompletions(rig, beads) {
+    const now = Date.now();
+
+    for (const bead of beads) {
+      const beadKey = `${rig}/${bead.id}`;
+      const prevStatus = this.previousBeadStatus[beadKey];
+
+      // Track start time when bead becomes in_progress
+      if (bead.status === 'in_progress' && prevStatus !== 'in_progress') {
+        this.taskStartTimes[beadKey] = now;
+      }
+
+      // Record completion when bead becomes done
+      if (bead.status === 'done' && prevStatus !== 'done') {
+        const startTime = this.taskStartTimes[beadKey];
+        const duration = startTime ? now - startTime : null;
+
+        // Find which agent completed this (from hooks)
+        const hooks = this.state.getState().hooks[rig] || {};
+        let completingAgent = null;
+        for (const [agent, hookData] of Object.entries(hooks)) {
+          if (hookData && hookData.bead === bead.id) {
+            completingAgent = agent;
+            break;
+          }
+        }
+
+        if (completingAgent) {
+          const agentKey = `${rig}/${completingAgent}`;
+          this.state.updateAgentStats(agentKey, {
+            completion: {
+              beadId: bead.id,
+              title: bead.title || '',
+              completedAt: new Date().toISOString(),
+              duration: duration
+            }
+          });
+          logger.info('poller', 'Task completed', {
+            rig,
+            agent: completingAgent,
+            beadId: bead.id,
+            duration: duration ? `${Math.round(duration / 1000)}s` : 'unknown'
+          });
+        }
+
+        delete this.taskStartTimes[beadKey];
+      }
+
+      this.previousBeadStatus[beadKey] = bead.status;
     }
   }
 

@@ -80,6 +80,8 @@
   $: currentHooks = selectedRig ? ($state.hooks?.[selectedRig] || {}) : {};
   $: agentHistory = $state.agentHistory || {};
   $: metrics = $state.metrics || {};
+  $: logs = $state.logs || [];
+  $: agentStats = $state.agentStats || {};
 
   // Apply filters to agents
   $: filteredAgents = currentAgents.filter(agent => {
@@ -152,6 +154,8 @@
       {agentHistory}
       {selectedAgent}
       {metrics}
+      {logs}
+      {agentStats}
       on:mailclick={handleMailClick}
       {hasInitialData}
     />

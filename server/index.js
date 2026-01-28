@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { StateManager } from './state.js';
 import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
+import { LogsWatcher } from './logs-watcher.js';
 import logger from './logger.js';
 
 const app = express();
@@ -13,6 +14,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const state = new StateManager();
 const gtPoller = new GtPoller(state);
 const fileWatcher = new FileWatcher(state);
+const logsWatcher = new LogsWatcher(state);
 
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
@@ -62,4 +64,5 @@ server.listen(PORT, () => {
   logger.info('server', 'gtviz server started', { port: PORT, url: `http://localhost:${PORT}` });
   gtPoller.start();
   fileWatcher.start();
+  logsWatcher.start();
 });

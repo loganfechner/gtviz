@@ -5,6 +5,7 @@
   import HookStatus from './HookStatus.svelte';
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
+  import AgentInsightsPanel from './AgentInsightsPanel.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -15,6 +16,8 @@
   export let selectedAgent = null;
   export let metrics = {};
   export let hasInitialData = false;
+  export let logs = [];
+  export let agentStats = {};
 
   const dispatch = createEventDispatcher();
 
@@ -43,6 +46,9 @@
     <button class:active={activeTab === 'timeline'} on:click={() => activeTab = 'timeline'}>
       Timeline
     </button>
+    <button class:active={activeTab === 'insights'} on:click={() => activeTab = 'insights'}>
+      Insights
+    </button>
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
@@ -57,6 +63,8 @@
       <HookStatus {hooks} loading={!hasInitialData} />
     {:else if activeTab === 'timeline'}
       <AgentTimeline agent={selectedAgent} history={currentAgentHistory} loading={!hasInitialData} />
+    {:else if activeTab === 'insights'}
+      <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
     {/if}
