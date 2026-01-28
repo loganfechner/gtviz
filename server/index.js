@@ -54,7 +54,13 @@ wss.on('connection', (ws) => {
   const currentState = stateManager.getState();
   ws.send(JSON.stringify({
     type: 'initial',
-    data: currentState,
+    data: {
+      ...currentState,
+      timeline: {
+        summary: stateManager.getTimelineSummary(),
+        events: stateManager.getTimelineEvents()
+      }
+    },
     timestamp: new Date().toISOString()
   }));
 
@@ -66,6 +72,25 @@ wss.on('connection', (ws) => {
         // Client requests immediate poll
         const hooks = await hookPoller.pollNow();
         stateManager.updateHooks(hooks);
+      } else if (message.type === 'timeline:get') {
+        // Client requests timeline data
+        ws.send(JSON.stringify({
+          type: 'timeline:data',
+          data: {
+            summary: stateManager.getTimelineSummary(),
+            events: stateManager.getTimelineEvents()
+          },
+          timestamp: new Date().toISOString()
+        }));
+      } else if (message.type === 'timeline:at') {
+        // Client requests state at specific time
+        const state = stateManager.getStateAtTime(message.timestamp);
+        ws.send(JSON.stringify({
+          type: 'timeline:state',
+          data: state,
+          requestedTime: message.timestamp,
+          timestamp: new Date().toISOString()
+        }));
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
@@ -124,6 +149,47 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// API: Get timeline summary
+app.get('/api/timeline', (req, res) => {
+  res.json({
+    summary: stateManager.getTimelineSummary(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get timeline entries within range
+app.get('/api/timeline/range', (req, res) => {
+  const { start, end } = req.query;
+  res.json({
+    entries: stateManager.getTimeline(start, end),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get timeline events (changes only, for markers)
+app.get('/api/timeline/events', (req, res) => {
+  res.json({
+    events: stateManager.getTimelineEvents(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get state at specific time
+app.get('/api/timeline/at/:timestamp', (req, res) => {
+  const state = stateManager.getStateAtTime(req.params.timestamp);
+  if (!state) {
+    res.status(404).json({
+      error: 'No state found at or before this time',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+  res.json({
+    state,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Catch-all for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
@@ -143,6 +209,7 @@ server.listen(PORT, () => {
 process.on('SIGTERM', () => {
   console.log('Shutting down...');
   hookPoller.stop();
+  stateManager.destroy();
   wss.close();
   server.close();
 });
