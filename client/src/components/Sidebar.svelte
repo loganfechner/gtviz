@@ -6,6 +6,7 @@
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
+  import DependencyGraph from './DependencyGraph.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -44,6 +45,9 @@
     <button class:active={activeTab === 'beads'} on:click={() => activeTab = 'beads'}>
       Beads
     </button>
+    <button class:active={activeTab === 'deps'} on:click={() => activeTab = 'deps'}>
+      Deps
+    </button>
     <button class:active={activeTab === 'hooks'} on:click={() => activeTab = 'hooks'}>
       Hooks
     </button>
@@ -58,11 +62,13 @@
     </button>
   </nav>
 
-  <div class="content">
+  <div class="content" class:graph-content={activeTab === 'deps'}>
     {#if activeTab === 'events'}
       <EventLog {events} {rig} on:mailclick={handleMailClick} on:eventclick={handleEventClick} loading={!hasInitialData} />
     {:else if activeTab === 'beads'}
       <BeadsList {beads} loading={!hasInitialData} />
+    {:else if activeTab === 'deps'}
+      <DependencyGraph {beads} loading={!hasInitialData} />
     {:else if activeTab === 'hooks'}
       <HookStatus {hooks} loading={!hasInitialData} />
     {:else if activeTab === 'timeline'}
@@ -115,5 +121,10 @@
     flex: 1;
     overflow-y: auto;
     padding: 12px;
+  }
+
+  .content.graph-content {
+    padding: 0;
+    overflow: hidden;
   }
 </style>

@@ -195,6 +195,22 @@ test.describe('Tab Switching', () => {
     await expect(metricsTab).toHaveClass(/active/);
   });
 
+  test('should switch to Deps tab and show dependency graph', async ({ page }) => {
+    const depsTab = page.locator('.sidebar .tabs button:has-text("Deps")');
+    await depsTab.click();
+
+    await expect(depsTab).toHaveClass(/active/);
+
+    // The dependency graph component should be visible
+    await expect(page.locator('.dependency-graph')).toBeVisible();
+
+    // Stats bar should be visible
+    await expect(page.locator('.dependency-graph .stats-bar')).toBeVisible();
+
+    // Legend should be visible
+    await expect(page.locator('.dependency-graph .legend')).toBeVisible();
+  });
+
   test('should display correct content for each tab', async ({ page }) => {
     // Switch to Beads and verify content changes
     await page.locator('.sidebar .tabs button:has-text("Beads")').click();

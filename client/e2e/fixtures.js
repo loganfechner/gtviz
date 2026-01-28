@@ -12,8 +12,10 @@ export const mockAgents = [
 ];
 
 export const mockBeads = [
-  { id: 'bead-1', title: 'Add feature X', status: 'in_progress' },
-  { id: 'bead-2', title: 'Fix bug Y', status: 'pending' },
+  { id: 'bead-1', title: 'Add feature X', status: 'in_progress', priority: 'high', dependsOn: [] },
+  { id: 'bead-2', title: 'Fix bug Y', status: 'pending', priority: 'normal', dependsOn: ['bead-1'] },
+  { id: 'bead-3', title: 'Write tests', status: 'open', priority: 'normal', dependsOn: ['bead-1', 'bead-2'] },
+  { id: 'bead-4', title: 'Deploy to staging', status: 'open', priority: 'critical', dependsOn: ['bead-3'] },
 ];
 
 export const mockHooks = {
@@ -59,8 +61,10 @@ export async function setupMockWebSocket(page) {
       },
       beads: {
         'test-rig': [
-          { id: 'bead-1', title: 'Add feature X', status: 'in_progress' },
-          { id: 'bead-2', title: 'Fix bug Y', status: 'pending' },
+          { id: 'bead-1', title: 'Add feature X', status: 'in_progress', priority: 'high', dependsOn: [] },
+          { id: 'bead-2', title: 'Fix bug Y', status: 'pending', priority: 'normal', dependsOn: ['bead-1'] },
+          { id: 'bead-3', title: 'Write tests', status: 'open', priority: 'normal', dependsOn: ['bead-1', 'bead-2'] },
+          { id: 'bead-4', title: 'Deploy to staging', status: 'open', priority: 'critical', dependsOn: ['bead-3'] },
         ],
       },
       hooks: {
