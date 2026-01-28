@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Build outputs
+client/dist/
+dist/
+
+# Git
+.git/
+.gitignore
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+
+# Logs and runtime
+logs/
+*.log
+.runtime/
+
+# Beads and local data
+.beads/
+
+# Docker files (prevent recursive builds)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+
+# Environment files (use runtime environment instead)
+.env
+.env.*

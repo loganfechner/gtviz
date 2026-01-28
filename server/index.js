@@ -1,12 +1,17 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { StateManager } from './state.js';
 import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
 import { LogsWatcher } from './logs-watcher.js';
 import logger from './logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const server = createServer(app);
@@ -138,6 +143,19 @@ app.get('/api/events/export', (req, res) => {
     res.json(allEvents);
   }
 });
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDistPath));
+
+  // SPA fallback - serve index.html for non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(join(clientDistPath, 'index.html'));
+    }
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 
