@@ -7,6 +7,7 @@ import { StateManager } from './state.js';
 import { FileWatcher } from './watchers.js';
 import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
+import { createHealthCalculator } from './health-calculator.js';
 import { LogsWatcher } from './logs-watcher.js';
 import { createAnomalyDetector } from './anomaly-detector.js';
 import { AlertingEngine } from './alerting-engine.js';
@@ -23,6 +24,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 const state = new StateManager();
 const metrics = createMetricsCollector(METRICS_HISTORY_SIZE);
+const healthCalculator = createHealthCalculator(METRICS_HISTORY_SIZE);
 const anomalyDetector = createAnomalyDetector({
   evaluationIntervalMs: 5000,
   alertCooldownMs: 60000
@@ -187,9 +189,18 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Broadcast metrics periodically and feed to anomaly detector
+// Broadcast metrics, health score, and feed to anomaly detector
 metricsInterval = setInterval(() => {
   const metricsData = metrics.getMetrics();
+  const healthScore = healthCalculator.calculate(metricsData);
+  const healthHistory = healthCalculator.getHistory();
+
+  // Add health data to metrics
+  metricsData.health = {
+    ...healthScore,
+    history: healthHistory
+  };
+
   state.updateMetrics(metricsData);
   anomalyDetector.processMetrics(metricsData);
   const message = JSON.stringify({ type: 'metrics', data: metricsData });
