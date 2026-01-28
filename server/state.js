@@ -19,6 +19,7 @@ const STATE_FILE = join(STATE_DIR, 'state.json');
  * @typedef {import('./types.js').AgentStats} AgentStats
  * @typedef {import('./types.js').AgentCompletion} AgentCompletion
  * @typedef {import('./types.js').HookData} HookData
+ * @typedef {import('./types.js').Forecasts} Forecasts
  */
 
 /**
@@ -59,6 +60,15 @@ export class StateManager extends EventEmitter {
           affectedAgentsCount: 0,
           topPatterns: []
         }
+      },
+      predictions: {     // Load forecasting predictions
+        loadPredictions: [],
+        queuePredictions: [],
+        completionEstimates: {},
+        capacityAnalysis: {},
+        spikePredictions: [],
+        lastUpdated: null,
+        confidence: 0
       }
     };
     /** @type {Object<string, string>} */
@@ -418,5 +428,22 @@ export class StateManager extends EventEmitter {
   setAlerts(alerts) {
     this.state.alerts = alerts;
     this.emit('update', this.state);
+  }
+
+  /**
+   * Update predictions from load forecaster
+   * @param {Forecasts} predictions - Forecast data
+   */
+  updatePredictions(predictions) {
+    this.state.predictions = predictions;
+    this.emit('predictions', predictions);
+  }
+
+  /**
+   * Get current predictions
+   * @returns {Forecasts} Current predictions
+   */
+  getPredictions() {
+    return this.state.predictions;
   }
 }

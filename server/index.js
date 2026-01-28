@@ -13,6 +13,7 @@ import { LogsWatcher } from './logs-watcher.js';
 import { createAnomalyDetector } from './anomaly-detector.js';
 import { AlertingEngine } from './alerting-engine.js';
 import { RulesStore } from './rules-store.js';
+import { createLoadForecaster } from './load-forecaster.js';
 import logger from './logger.js';
 import { METRICS_HISTORY_SIZE, METRICS_BROADCAST_MS } from './constants.js';
 
@@ -36,6 +37,10 @@ const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
 const rulesStore = new RulesStore();
 const alertingEngine = new AlertingEngine(state, rulesStore);
+const loadForecaster = createLoadForecaster({
+  forecastIntervalMs: 30000,  // Update forecasts every 30 seconds
+  historyWindowMs: 3600000    // Use 1 hour of history
+});
 
 // Track intervals for cleanup
 let metricsInterval = null;
@@ -68,6 +73,9 @@ async function gracefulShutdown(signal) {
 
   logsWatcher.stop();
   logger.info('shutdown', 'LogsWatcher stopped');
+
+  loadForecaster.stop();
+  logger.info('shutdown', 'LoadForecaster stopped');
 
   // Clear metrics broadcast interval
   if (metricsInterval) {
@@ -144,6 +152,18 @@ anomalyDetector.on('alertDismissed', (alert) => {
 
 // Start metrics persistence
 metricsStorage.start();
+
+// Initialize load forecaster with data sources
+loadForecaster.initialize(metricsStorage, state);
+
+// Connect load forecaster to state and WebSocket broadcast
+loadForecaster.on('update', (predictions) => {
+  state.updatePredictions(predictions);
+  const message = JSON.stringify({ type: 'predictions', data: predictions });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
 
 // Broadcast state changes to all connected clients
 state.on('update', (data) => {
@@ -506,6 +526,53 @@ app.get('/api/metrics/storage', (req, res) => {
   }
 });
 
+// Load forecasting API endpoints
+app.get('/api/predictions', (req, res) => {
+  res.json(loadForecaster.getForecasts());
+});
+
+app.get('/api/predictions/load', (req, res) => {
+  const forecasts = loadForecaster.getForecasts();
+  res.json({
+    predictions: forecasts.loadPredictions,
+    lastUpdated: forecasts.lastUpdated,
+    confidence: forecasts.confidence
+  });
+});
+
+app.get('/api/predictions/queue', (req, res) => {
+  const forecasts = loadForecaster.getForecasts();
+  res.json({
+    predictions: forecasts.queuePredictions,
+    lastUpdated: forecasts.lastUpdated,
+    confidence: forecasts.confidence
+  });
+});
+
+app.get('/api/predictions/eta/:beadId', (req, res) => {
+  const eta = loadForecaster.getBeadEta(req.params.beadId);
+  if (!eta) {
+    return res.status(404).json({ error: 'Bead not found or not in queue' });
+  }
+  res.json(eta);
+});
+
+app.get('/api/predictions/capacity', (req, res) => {
+  res.json(loadForecaster.getCapacity());
+});
+
+app.get('/api/predictions/spikes', (req, res) => {
+  res.json({
+    spikes: loadForecaster.getSpikes(),
+    lastUpdated: loadForecaster.getForecasts().lastUpdated
+  });
+});
+
+app.post('/api/predictions/refresh', (req, res) => {
+  loadForecaster.update();
+  res.json({ status: 'ok', message: 'Forecast refresh triggered' });
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = join(__dirname, '..', 'client', 'dist');
@@ -543,4 +610,6 @@ server.listen(PORT, async () => {
   fileWatcher.start();
   logsWatcher.start();
   anomalyDetector.start();
+  loadForecaster.start();
+  logger.info('server', 'LoadForecaster started');
 });

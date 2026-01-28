@@ -321,6 +321,82 @@
  */
 
 // =============================================================================
+// Prediction Types
+// =============================================================================
+
+/**
+ * Load prediction for a specific time horizon
+ * @typedef {Object} LoadPrediction
+ * @property {number} horizon - Minutes ahead
+ * @property {string} timestamp - ISO timestamp of predicted time
+ * @property {number} predicted - Predicted load value
+ * @property {number} lower - Lower confidence bound
+ * @property {number} upper - Upper confidence bound
+ */
+
+/**
+ * Queue depth prediction
+ * @typedef {Object} QueuePrediction
+ * @property {number} horizon - Minutes ahead
+ * @property {string} timestamp - ISO timestamp of predicted time
+ * @property {number} currentQueue - Current queue depth
+ * @property {number} predicted - Predicted queue depth
+ * @property {number} completionRate - Beads per minute completion rate
+ */
+
+/**
+ * Completion time estimate for a bead
+ * @typedef {Object} CompletionEstimate
+ * @property {string} beadId - Bead ID
+ * @property {string} title - Bead title
+ * @property {string} status - Current bead status
+ * @property {string} rig - Rig name
+ * @property {number} queuePosition - Position in queue
+ * @property {string} estimatedCompletionTime - ISO timestamp of estimated completion
+ * @property {number} estimatedMinutes - Estimated minutes until completion
+ * @property {number} confidence - Confidence score 0-1
+ */
+
+/**
+ * Agent capacity analysis
+ * @typedef {Object} AgentCapacityAnalysis
+ * @property {string} name - Agent name
+ * @property {string} rig - Rig name
+ * @property {string} status - Current status
+ * @property {boolean} hasWork - Whether agent has work
+ * @property {string|null} currentBead - Current bead ID
+ * @property {number} throughputPerHour - Completions per hour
+ * @property {number} avgDurationMin - Average duration in minutes
+ * @property {number} recentCompletions - Recent completion count
+ * @property {boolean} isBottleneck - Whether agent is a bottleneck
+ */
+
+/**
+ * Spike prediction
+ * @typedef {Object} SpikePrediction
+ * @property {number} horizon - Minutes until spike
+ * @property {string} timestamp - ISO timestamp of predicted spike
+ * @property {number} predictedLoad - Predicted load at spike
+ * @property {number} threshold - Spike threshold
+ * @property {'high' | 'medium'} severity - Spike severity
+ * @property {string} recommendation - Recommended action
+ */
+
+/**
+ * Complete forecast data
+ * @typedef {Object} Forecasts
+ * @property {LoadPrediction[]} loadPredictions - Load predictions at horizons
+ * @property {QueuePrediction[]} queuePredictions - Queue depth predictions
+ * @property {Object<string, CompletionEstimate>} completionEstimates - ETA per bead
+ * @property {Object} capacityAnalysis - Capacity analysis summary and per-agent
+ * @property {SpikePrediction[]} spikePredictions - Predicted spikes
+ * @property {string|null} lastUpdated - Last forecast update timestamp
+ * @property {number} confidence - Overall confidence 0-1
+ * @property {number} [dataPoints] - Number of data points used
+ * @property {number} [historyWindow] - History window in ms
+ */
+
+// =============================================================================
 // Configuration Types
 // =============================================================================
 
