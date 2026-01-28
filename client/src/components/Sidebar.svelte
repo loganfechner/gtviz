@@ -6,6 +6,7 @@
   import AgentTimeline from './AgentTimeline.svelte';
   import MetricsDashboard from './MetricsDashboard.svelte';
   import AgentInsightsPanel from './AgentInsightsPanel.svelte';
+  import AgentComparisonDashboard from './AgentComparisonDashboard.svelte';
 
   export let beads = [];
   export let hooks = {};
@@ -56,6 +57,9 @@
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
+    <button class:active={activeTab === 'compare'} on:click={() => activeTab = 'compare'}>
+      Compare
+    </button>
   </nav>
 
   <div class="content">
@@ -71,6 +75,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'compare'}
+      <AgentComparisonDashboard {agents} {agentStats} {agentHistory} {rig} loading={!hasInitialData} />
     {/if}
   </div>
 </aside>
@@ -92,12 +98,12 @@
 
   .tabs button {
     flex: 1;
-    padding: 12px 8px;
+    padding: 12px 4px;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: #8b949e;
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     transition: all 0.15s;
   }
