@@ -4,6 +4,7 @@
   import MetricsPanel from './components/MetricsPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
   import NetworkGraph from './components/NetworkGraph.svelte';
+  import FilterBar from './components/FilterBar.svelte';
 
   let hooks = {};
   let connected = false;
@@ -12,6 +13,12 @@
   let viewMode = 'graph'; // 'graph' or 'grid'
   let theme = 'dark';
   let metrics = {};
+
+  // Filter state
+  let searchQuery = '';
+  let statusFilter = null;
+  let roleFilter = null;
+  let sortBy = 'role';
 
   function getSystemTheme() {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -119,14 +126,62 @@
     }
   });
 
-  $: agentList = Object.values(hooks).sort((a, b) => {
-    // Sort by role priority: witness, refinery, polecats
+  // All agents sorted
+  $: allAgents = Object.values(hooks);
+
+  // Filter agents based on search and filter criteria
+  $: filteredAgents = allAgents.filter(agent => {
+    // Search filter
+    if (searchQuery && !agent.agent.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    // Status filter
+    if (statusFilter) {
+      if (statusFilter === 'hooked' && !agent.beadId) return false;
+      if (statusFilter === 'idle' && (agent.beadId || agent.status === 'error')) return false;
+      if (statusFilter === 'active' && agent.status !== 'active') return false;
+      if (statusFilter === 'error' && agent.status !== 'error') return false;
+    }
+    // Role filter
+    if (roleFilter && agent.role !== roleFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  // Sort agents based on sortBy option
+  $: agentList = [...filteredAgents].sort((a, b) => {
+    if (sortBy === 'name') {
+      return a.agent.localeCompare(b.agent);
+    }
+    if (sortBy === 'status') {
+      const statusOrder = { active: 0, hooked: 1, idle: 2, error: 3 };
+      const getStatus = (agent) => {
+        if (agent.status === 'error') return 'error';
+        if (agent.status === 'active') return 'active';
+        if (agent.beadId) return 'hooked';
+        return 'idle';
+      };
+      const orderA = statusOrder[getStatus(a)] ?? 4;
+      const orderB = statusOrder[getStatus(b)] ?? 4;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.agent.localeCompare(b.agent);
+    }
+    // Default: sort by role
     const roleOrder = { witness: 0, refinery: 1, polecat: 2 };
     const orderA = roleOrder[a.role] ?? 3;
     const orderB = roleOrder[b.role] ?? 3;
     if (orderA !== orderB) return orderA - orderB;
     return a.agent.localeCompare(b.agent);
   });
+
+  function handleFilter(event) {
+    const { searchQuery: sq, statusFilter: sf, roleFilter: rf, sortBy: sb } = event.detail;
+    searchQuery = sq;
+    statusFilter = sf;
+    roleFilter = rf;
+    sortBy = sb;
+  }
 </script>
 
 <main>
@@ -158,6 +213,16 @@
     </button>
   </header>
 
+  <FilterBar
+    {searchQuery}
+    {statusFilter}
+    {roleFilter}
+    {sortBy}
+    agentCount={allAgents.length}
+    filteredCount={filteredAgents.length}
+    on:filter={handleFilter}
+  />
+
   <div class="layout">
     <div class="main-area">
       {#if viewMode === 'graph'}
@@ -165,7 +230,13 @@
           <NetworkGraph agents={agentList} />
         </div>
         {#if agentList.length === 0}
-          <p class="empty overlay">No agents discovered yet...</p>
+          <p class="empty overlay">
+            {#if allAgents.length === 0}
+              No agents discovered yet...
+            {:else}
+              No agents match current filters
+            {/if}
+          </p>
         {/if}
       {:else}
         <h2>Agents</h2>
@@ -175,7 +246,13 @@
           {/each}
 
           {#if agentList.length === 0}
-            <p class="empty">No agents discovered yet...</p>
+            <p class="empty">
+              {#if allAgents.length === 0}
+                No agents discovered yet...
+              {:else}
+                No agents match current filters
+              {/if}
+            </p>
           {/if}
         </div>
       {/if}
@@ -390,7 +467,7 @@
   }
 
   .graph-container {
-    height: calc(100vh - 120px);
+    height: calc(100vh - 170px);
     position: relative;
   }
 </style>
