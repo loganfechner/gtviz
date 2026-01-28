@@ -250,7 +250,9 @@ export class GtPoller {
           }
         }, `pollBeads(${rig})`);
 
-        this.state.updateBeads(rig, beads);
+        // Add rig information to each bead
+        const beadsWithRig = beads.map(bead => ({ ...bead, rig }));
+        this.state.updateBeads(rig, beadsWithRig);
         this.failureCount[`beads-${rig}`] = 0;
       } catch (e) {
         const key = `beads-${rig}`;
@@ -265,7 +267,27 @@ export class GtPoller {
 
   parseBeads(output) {
     try {
-      return JSON.parse(output);
+      const data = JSON.parse(output);
+      // Normalize JSON beads to include all expected fields
+      if (Array.isArray(data)) {
+        return data.map(bead => ({
+          id: bead.id,
+          title: bead.title || '',
+          status: bead.status || 'open',
+          priority: this.normalizePriority(bead.priority),
+          labels: bead.labels || [],
+          owner: bead.owner || null,
+          assignee: bead.assignee || null,
+          type: bead.type || null,
+          description: bead.description || '',
+          notes: bead.notes || [],
+          dependsOn: bead.dependsOn || bead.depends_on || [],
+          createdAt: bead.createdAt || bead.created || null,
+          updatedAt: bead.updatedAt || bead.updated || null,
+          closedAt: bead.closedAt || bead.closed || null
+        }));
+      }
+      return this.parseBeadsText(output);
     } catch {
       return this.parseBeadsText(output);
     }
@@ -275,16 +297,194 @@ export class GtPoller {
     const beads = [];
     const lines = output.split('\n').filter(l => l.trim());
     for (const line of lines) {
-      const match = line.match(/(\S+)\s+(open|in_progress|done)?\s*(.*)/);
-      if (match && match[1]) {
+      // Parse: status-symbol id · title [● priority · STATUS]
+      // Example: ? gt-abc123 · Add feature [● P2 · HOOKED]
+      const fullMatch = line.match(/^([?○●✓✗])\s+(\S+)\s*·?\s*(.+?)(?:\s+\[([^\]]+)\])?$/);
+      if (fullMatch) {
+        const [, symbol, id, title, meta] = fullMatch;
+        const bead = {
+          id,
+          title: title.trim(),
+          status: this.parseStatusFromSymbol(symbol),
+          priority: null,
+          labels: []
+        };
+
+        if (meta) {
+          // Parse metadata like "● P2 · HOOKED" or "● critical · OPEN"
+          const priorityMatch = meta.match(/P([1-4])|critical|high|normal|low/i);
+          if (priorityMatch) {
+            const p = priorityMatch[0].toLowerCase();
+            if (p === 'p1' || p === 'critical') bead.priority = 'critical';
+            else if (p === 'p2' || p === 'high') bead.priority = 'high';
+            else if (p === 'p3' || p === 'normal') bead.priority = 'normal';
+            else if (p === 'p4' || p === 'low') bead.priority = 'low';
+          }
+          const statusMatch = meta.match(/HOOKED|OPEN|IN_PROGRESS|CLOSED|DONE/i);
+          if (statusMatch) {
+            bead.status = statusMatch[0].toLowerCase().replace('_', '_');
+          }
+        }
+        beads.push(bead);
+        continue;
+      }
+
+      // Fallback: simple format
+      const simpleMatch = line.match(/(\S+)\s+(open|hooked|in_progress|done|closed)?\s*(.*)/);
+      if (simpleMatch && simpleMatch[1]) {
         beads.push({
-          id: match[1],
-          status: match[2] || 'open',
-          title: match[3] || ''
+          id: simpleMatch[1],
+          status: simpleMatch[2] || 'open',
+          title: simpleMatch[3] || '',
+          priority: null,
+          labels: []
         });
       }
     }
     return beads;
+  }
+
+  parseStatusFromSymbol(symbol) {
+    switch (symbol) {
+      case '?': return 'open';
+      case '○': return 'open';
+      case '●': return 'hooked';
+      case '✓': return 'done';
+      case '✗': return 'closed';
+      default: return 'open';
+    }
+  }
+
+  async fetchBeadDetails(beadId, cwd) {
+    try {
+      const { stdout } = await execAsync(`bd show ${beadId} --json 2>/dev/null || bd show ${beadId}`, {
+        cwd,
+        timeout: 5000
+      });
+      return this.parseBeadDetails(stdout, beadId);
+    } catch {
+      return null;
+    }
+  }
+
+  parseBeadDetails(output, beadId) {
+    // Try JSON first
+    try {
+      const data = JSON.parse(output);
+      return {
+        id: data.id || beadId,
+        title: data.title || '',
+        description: data.description || '',
+        status: data.status || 'open',
+        priority: this.normalizePriority(data.priority),
+        labels: data.labels || [],
+        owner: data.owner || null,
+        assignee: data.assignee || null,
+        type: data.type || null,
+        notes: data.notes || [],
+        dependsOn: data.dependsOn || data.depends_on || [],
+        createdAt: data.createdAt || data.created || null,
+        updatedAt: data.updatedAt || data.updated || null,
+        closedAt: data.closedAt || data.closed || null
+      };
+    } catch {}
+
+    // Parse text output
+    const details = {
+      id: beadId,
+      title: '',
+      description: '',
+      status: 'open',
+      priority: null,
+      labels: [],
+      owner: null,
+      assignee: null,
+      type: null,
+      notes: [],
+      dependsOn: [],
+      createdAt: null,
+      updatedAt: null,
+      closedAt: null
+    };
+
+    const lines = output.split('\n');
+    let inDescription = false;
+    let descriptionLines = [];
+
+    for (const line of lines) {
+      // Parse header line: ? bead-id · Title [● P2 · STATUS]
+      const headerMatch = line.match(/^[?○●✓✗]\s+(\S+)\s*·\s*(.+?)(?:\s+\[([^\]]+)\])?$/);
+      if (headerMatch) {
+        details.id = headerMatch[1];
+        details.title = headerMatch[2].trim();
+        if (headerMatch[3]) {
+          const meta = headerMatch[3];
+          const priorityMatch = meta.match(/P([1-4])|critical|high|normal|low/i);
+          if (priorityMatch) {
+            details.priority = this.normalizePriority(priorityMatch[0]);
+          }
+          const statusMatch = meta.match(/HOOKED|OPEN|IN_PROGRESS|CLOSED|DONE/i);
+          if (statusMatch) {
+            details.status = statusMatch[0].toLowerCase();
+          }
+        }
+        continue;
+      }
+
+      // Parse metadata fields
+      const ownerMatch = line.match(/^Owner:\s*(.+)/);
+      if (ownerMatch) { details.owner = ownerMatch[1].trim(); continue; }
+
+      const assigneeMatch = line.match(/^Assignee:\s*(.+)/);
+      if (assigneeMatch) { details.assignee = assigneeMatch[1].trim(); continue; }
+
+      const typeMatch = line.match(/^Type:\s*(.+)/);
+      if (typeMatch) { details.type = typeMatch[1].trim(); continue; }
+
+      const createdMatch = line.match(/^Created:\s*(.+)/);
+      if (createdMatch) { details.createdAt = createdMatch[1].trim(); continue; }
+
+      const updatedMatch = line.match(/^Updated:\s*(.+)/);
+      if (updatedMatch) { details.updatedAt = updatedMatch[1].trim(); continue; }
+
+      // Description section
+      if (line.match(/^DESCRIPTION/i)) {
+        inDescription = true;
+        continue;
+      }
+
+      if (inDescription) {
+        if (line.match(/^[A-Z]+$/)) {
+          inDescription = false;
+          details.description = descriptionLines.join('\n').trim();
+          descriptionLines = [];
+        } else {
+          descriptionLines.push(line);
+        }
+      }
+
+      // Dependencies
+      const depMatch = line.match(/^\s*→\s*[○●]\s*(\S+):/);
+      if (depMatch) {
+        details.dependsOn.push(depMatch[1]);
+      }
+    }
+
+    if (descriptionLines.length > 0) {
+      details.description = descriptionLines.join('\n').trim();
+    }
+
+    return details;
+  }
+
+  normalizePriority(p) {
+    if (!p) return null;
+    const lower = p.toLowerCase();
+    if (lower === 'p1' || lower === 'critical') return 'critical';
+    if (lower === 'p2' || lower === 'high') return 'high';
+    if (lower === 'p3' || lower === 'normal') return 'normal';
+    if (lower === 'p4' || lower === 'low') return 'low';
+    return lower;
   }
 
   async pollHooks() {
