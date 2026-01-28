@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy, afterUpdate } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import * as d3 from 'd3';
 
   export let agents = [];
@@ -12,12 +12,6 @@
 
   // Position cache to maintain node positions between updates
   const positionCache = new Map();
-
-  // Fixed positions for key roles (relative to container)
-  const fixedPositions = {
-    witness: { fx: null, fy: 80 },    // Top center, fixed Y
-    refinery: { fx: null, fy: null }  // Will be positioned right side
-  };
 
   // Role colors
   const roleColors = {
