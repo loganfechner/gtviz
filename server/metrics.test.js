@@ -18,6 +18,13 @@ describe('createMetricsCollector', () => {
     assert.ok('totalEvents' in metrics, 'has totalEvents');
     assert.ok('agentActivity' in metrics, 'has agentActivity');
     assert.ok('history' in metrics, 'has history');
+    assert.ok('successfulPolls' in metrics, 'has successfulPolls');
+    assert.ok('failedPolls' in metrics, 'has failedPolls');
+    assert.ok('successRate' in metrics, 'has successRate');
+    assert.ok('wsConnections' in metrics, 'has wsConnections');
+    assert.ok('totalWsConnections' in metrics, 'has totalWsConnections');
+    assert.ok('totalWsMessages' in metrics, 'has totalWsMessages');
+    assert.ok('bufferSizes' in metrics, 'has bufferSizes');
   });
 
   it('records poll durations', () => {
@@ -33,6 +40,51 @@ describe('createMetricsCollector', () => {
     assert.strictEqual(metrics.avgPollDuration, 150, 'avg poll duration is 150');
     assert.strictEqual(metrics.totalPolls, 3, 'total polls is 3');
     assert.strictEqual(metrics.history.pollDurations.length, 3, 'history has 3 entries');
+  });
+
+  it('tracks poll success and failure rates', () => {
+    const collector = createMetricsCollector();
+
+    collector.recordPollDuration(100, true);
+    collector.recordPollDuration(200, true);
+    collector.recordPollDuration(150, false);
+    collector.recordPollDuration(120, true);
+
+    const metrics = collector.getMetrics();
+
+    assert.strictEqual(metrics.successfulPolls, 3, 'successful polls is 3');
+    assert.strictEqual(metrics.failedPolls, 1, 'failed polls is 1');
+    assert.strictEqual(metrics.successRate, 75, 'success rate is 75%');
+  });
+
+  it('tracks websocket connections and messages', () => {
+    const collector = createMetricsCollector();
+
+    collector.recordWsConnection();
+    collector.recordWsConnection();
+    collector.recordWsMessage();
+    collector.recordWsMessage();
+    collector.recordWsMessage();
+    collector.recordWsDisconnection();
+
+    const metrics = collector.getMetrics();
+
+    assert.strictEqual(metrics.wsConnections, 1, 'current ws connections is 1');
+    assert.strictEqual(metrics.totalWsConnections, 2, 'total ws connections is 2');
+    assert.strictEqual(metrics.totalWsMessages, 3, 'total ws messages is 3');
+  });
+
+  it('exposes buffer sizes', () => {
+    const collector = createMetricsCollector();
+
+    collector.recordPollDuration(100);
+    collector.recordPollDuration(200);
+    collector.recordStateChange(5);
+
+    const metrics = collector.getMetrics();
+
+    assert.strictEqual(metrics.bufferSizes.pollDurations, 2, 'poll durations buffer has 2 entries');
+    assert.strictEqual(metrics.bufferSizes.currentIntervalEvents, 5, 'current interval has 5 events');
   });
 
   it('records state changes', () => {
@@ -83,8 +135,11 @@ describe('createMetricsCollector', () => {
     const collector = createMetricsCollector();
 
     collector.recordPollDuration(100);
+    collector.recordPollDuration(50, false);
     collector.recordStateChange(5);
     collector.updateAgentActivity({ agent1: { status: 'active' } });
+    collector.recordWsConnection();
+    collector.recordWsMessage();
 
     collector.reset();
     const metrics = collector.getMetrics();
@@ -94,5 +149,10 @@ describe('createMetricsCollector', () => {
     assert.strictEqual(metrics.totalEvents, 0, 'total events reset');
     assert.strictEqual(metrics.agentActivity.active, 0, 'agent activity reset');
     assert.strictEqual(metrics.history.pollDurations.length, 0, 'history reset');
+    assert.strictEqual(metrics.successfulPolls, 0, 'successful polls reset');
+    assert.strictEqual(metrics.failedPolls, 0, 'failed polls reset');
+    assert.strictEqual(metrics.wsConnections, 0, 'ws connections reset');
+    assert.strictEqual(metrics.totalWsConnections, 0, 'total ws connections reset');
+    assert.strictEqual(metrics.totalWsMessages, 0, 'total ws messages reset');
   });
 });

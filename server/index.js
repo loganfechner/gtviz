@@ -78,6 +78,7 @@ setInterval(() => {
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   console.log('Client connected');
+  metricsCollector.recordWsConnection();
 
   // Send current state on connection
   const currentState = stateManager.getState();
@@ -89,6 +90,7 @@ wss.on('connection', (ws) => {
   }));
 
   ws.on('message', async (data) => {
+    metricsCollector.recordWsMessage();
     try {
       const message = JSON.parse(data.toString());
 
@@ -104,6 +106,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('Client disconnected');
+    metricsCollector.recordWsDisconnection();
   });
 });
 
