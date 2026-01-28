@@ -1,0 +1,7 @@
+.runtime/
+.claude/
+.logs/
+.beads/
+node_modules/
+client/node_modules/
+client/dist/

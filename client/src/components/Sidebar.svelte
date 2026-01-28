@@ -1,0 +1,93 @@
+<script>
+  import { createEventDispatcher } from 'svelte';
+  import BeadsList from './BeadsList.svelte';
+  import EventLog from './EventLog.svelte';
+  import HookStatus from './HookStatus.svelte';
+  import RigTree from './RigTree.svelte';
+
+  export let beads = [];
+  export let hooks = {};
+  export let events = [];
+  export let rig = null;
+  export let agents = [];
+
+  const dispatch = createEventDispatcher();
+
+  let activeTab = 'tree';
+
+  function handleFocus(event) {
+    dispatch('focus', event.detail);
+  }
+</script>
+
+<aside class="sidebar">
+  <nav class="tabs">
+    <button class:active={activeTab === 'tree'} on:click={() => activeTab = 'tree'}>
+      Tree
+    </button>
+    <button class:active={activeTab === 'events'} on:click={() => activeTab = 'events'}>
+      Events
+    </button>
+    <button class:active={activeTab === 'beads'} on:click={() => activeTab = 'beads'}>
+      Beads
+    </button>
+    <button class:active={activeTab === 'hooks'} on:click={() => activeTab = 'hooks'}>
+      Hooks
+    </button>
+  </nav>
+
+  <div class="content">
+    {#if activeTab === 'tree'}
+      <RigTree {agents} {rig} on:focus={handleFocus} />
+    {:else if activeTab === 'events'}
+      <EventLog {events} {rig} />
+    {:else if activeTab === 'beads'}
+      <BeadsList {beads} />
+    {:else if activeTab === 'hooks'}
+      <HookStatus {hooks} />
+    {/if}
+  </div>
+</aside>
+
+<style>
+  .sidebar {
+    width: 320px;
+    background: #161b22;
+    border-left: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid #30363d;
+    padding: 0 8px;
+  }
+
+  .tabs button {
+    flex: 1;
+    padding: 12px 8px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #8b949e;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tabs button:hover {
+    color: #c9d1d9;
+  }
+
+  .tabs button.active {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+</style>
