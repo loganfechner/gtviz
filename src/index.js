@@ -9,6 +9,7 @@
 
 import { StatusDetector, AgentStatus, getAllAgentStatus, getAllAgentStatusFlat } from './status-detector.js';
 import { createServer } from 'http';
+import { config } from '../config.js';
 
 // CLI mode when run directly
 const isMain = process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('gtviz');
@@ -65,7 +66,7 @@ async function printStatus() {
  * Watch mode - continuously print status updates
  */
 async function watchStatus() {
-  const detector = new StatusDetector({ pollInterval: 2000 });
+  const detector = new StatusDetector({ pollInterval: config.polling.watchInterval });
 
   console.log('Watching agent status (Ctrl+C to stop)...\n');
 
@@ -95,8 +96,8 @@ async function watchStatus() {
 /**
  * Start HTTP server for status API
  */
-function startServer(port = 3847) {
-  const detector = new StatusDetector({ pollInterval: 5000 });
+function startServer(port = config.statusApi.port) {
+  const detector = new StatusDetector({ pollInterval: config.polling.statusInterval });
   detector.start();
 
   const server = createServer(async (req, res) => {
@@ -149,7 +150,7 @@ if (isMain) {
     case 'serve':
     case 'server':
     case '-s':
-      const port = parseInt(process.argv[3]) || 3847;
+      const port = parseInt(process.argv[3]) || config.statusApi.port;
       startServer(port);
       break;
 
@@ -167,7 +168,7 @@ gtviz - Gas Town Agent Status Visualization
 Usage:
   gtviz              Show current agent status
   gtviz watch        Watch for status changes in real-time
-  gtviz serve [port] Start HTTP server (default port 3847)
+  gtviz serve [port] Start HTTP server (default port ${config.statusApi.port})
   gtviz json         Output status as JSON
 
 Status Legend:

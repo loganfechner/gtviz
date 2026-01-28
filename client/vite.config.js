@@ -1,14 +1,15 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { config } from '../config.js';
 
 export default defineConfig({
   plugins: [svelte()],
   server: {
-    port: 5173,
+    port: config.client.port,
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': config.client.apiUrl,
       '/ws': {
-        target: 'ws://localhost:3000',
+        target: config.client.wsUrl,
         ws: true
       }
     }

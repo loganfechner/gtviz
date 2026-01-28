@@ -13,14 +13,15 @@ import { fileURLToPath } from 'url';
 import { createHookPoller } from './gt-poller.js';
 import { createStateManager } from './state.js';
 import { createMetricsCollector } from './metrics.js';
+import { config } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configuration
-const PORT = process.env.PORT || 3000;
-const RIG_PATH = process.env.RIG_PATH || path.resolve(__dirname, '../../..');
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000', 10);
+// Configuration from centralized config
+const PORT = config.server.port;
+const RIG_PATH = config.server.rigPath;
+const POLL_INTERVAL = config.polling.hookInterval;
 
 // Initialize Express
 const app = express();
@@ -59,8 +60,8 @@ stateManager.subscribe((message) => {
   });
 });
 
-// Broadcast metrics periodically (every 5 seconds)
-const METRICS_BROADCAST_INTERVAL = 5000;
+// Broadcast metrics periodically
+const METRICS_BROADCAST_INTERVAL = config.polling.metricsInterval;
 setInterval(() => {
   const metrics = metricsCollector.getMetrics();
   const payload = JSON.stringify({
