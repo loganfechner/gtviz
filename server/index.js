@@ -31,10 +31,12 @@ const wss = new WebSocketServer({ server });
 // Initialize state manager
 const stateManager = createStateManager();
 
-// Initialize hook poller
+// Initialize hook poller with metrics callback
 const hookPoller = createHookPoller(RIG_PATH, (hooks) => {
   stateManager.updateHooks(hooks);
-}, POLL_INTERVAL);
+}, POLL_INTERVAL, (pollDuration) => {
+  stateManager.recordPollTime(pollDuration);
+});
 
 // Subscribe to state changes and broadcast to WebSocket clients
 stateManager.subscribe((message) => {
@@ -46,6 +48,21 @@ stateManager.subscribe((message) => {
   });
 });
 
+// Broadcast metrics periodically (every 5 seconds)
+setInterval(() => {
+  const metricsMessage = {
+    type: 'metrics:update',
+    data: stateManager.getMetrics(),
+    timestamp: new Date().toISOString()
+  };
+  const payload = JSON.stringify(metricsMessage);
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) { // OPEN
+      client.send(payload);
+    }
+  });
+}, 5000);
+
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   console.log('Client connected');
@@ -54,7 +71,10 @@ wss.on('connection', (ws) => {
   const currentState = stateManager.getState();
   ws.send(JSON.stringify({
     type: 'initial',
-    data: currentState,
+    data: {
+      ...currentState,
+      metrics: stateManager.getMetrics()
+    },
     timestamp: new Date().toISOString()
   }));
 
@@ -111,6 +131,14 @@ app.post('/api/poll', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// API: Get performance metrics
+app.get('/api/metrics', (req, res) => {
+  res.json({
+    metrics: stateManager.getMetrics(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // API: Health check

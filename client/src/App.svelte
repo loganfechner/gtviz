@@ -2,11 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import PerformanceMetricsPanel from './components/PerformanceMetricsPanel.svelte';
 
   let hooks = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+  let metrics = null;
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -44,12 +46,17 @@
     switch (message.type) {
       case 'initial':
         hooks = message.data.hooks || {};
+        metrics = message.data.metrics || null;
         lastUpdated = message.timestamp;
         break;
 
       case 'hooks:updated':
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
+        break;
+
+      case 'metrics:update':
+        metrics = message.data || null;
         break;
     }
   }
@@ -108,6 +115,7 @@
 
     <aside class="sidebar">
       <HookStatusPanel {hooks} {lastUpdated} />
+      <PerformanceMetricsPanel {metrics} />
     </aside>
   </div>
 </main>

@@ -123,16 +123,21 @@ export async function pollAllAgentHooks(rigPath) {
  * @param {number} intervalMs - Polling interval in milliseconds
  * @returns {Object} Poller control object
  */
-export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
+export function createHookPoller(rigPath, onUpdate, intervalMs = 5000, onMetrics = null) {
   let intervalId = null;
   let isRunning = false;
 
   const poll = async () => {
     if (!isRunning) return;
 
+    const startTime = Date.now();
     try {
       const hooks = await pollAllAgentHooks(rigPath);
+      const duration = Date.now() - startTime;
       onUpdate(hooks);
+      if (onMetrics) {
+        onMetrics(duration);
+      }
     } catch (error) {
       console.error('Hook polling error:', error);
     }
