@@ -2,11 +2,14 @@
   import { onMount, onDestroy } from 'svelte';
   import HookStatusPanel from './components/HookStatusPanel.svelte';
   import AgentCard from './components/AgentCard.svelte';
+  import NetworkGraph from './components/NetworkGraph.svelte';
 
   let hooks = {};
   let connected = false;
   let ws = null;
   let lastUpdated = null;
+  let transfers = []; // Track MQ submissions for animation
+  let transferCounter = 0;
 
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -48,10 +51,51 @@
         break;
 
       case 'hooks:updated':
+        // Detect MQ submissions: polecat goes from active/hooked to idle
+        if (message.data.changes) {
+          detectMQSubmissions(message.data.changes);
+        }
         hooks = message.data.hooks || {};
         lastUpdated = message.timestamp;
         break;
     }
+  }
+
+  function detectMQSubmissions(changes) {
+    const refinery = Object.values(hooks).find(h => h.role === 'refinery');
+    if (!refinery) return;
+
+    for (const change of changes) {
+      const wasWorking = change.previous &&
+        (change.previous.status === 'active' || change.previous.status === 'hooked') &&
+        change.previous.beadId;
+
+      const isNowIdle = change.current.status === 'idle' || !change.current.beadId;
+
+      const isPolecat = change.current.role === 'polecat';
+
+      // Polecat finished work -> trigger MQ submission animation
+      if (isPolecat && wasWorking && isNowIdle) {
+        triggerTransferAnimation(change.agent, refinery.agent, change.previous.beadId);
+      }
+    }
+  }
+
+  function triggerTransferAnimation(from, to, beadId) {
+    transferCounter++;
+    const transfer = {
+      id: `transfer-${transferCounter}`,
+      from,
+      to,
+      beadId,
+      timestamp: Date.now()
+    };
+    transfers = [...transfers, transfer];
+
+    // Clean up old transfers after animation
+    setTimeout(() => {
+      transfers = transfers.filter(t => t.id !== transfer.id);
+    }, 3000);
   }
 
   function requestPoll() {
@@ -94,16 +138,31 @@
 
   <div class="layout">
     <div class="main-area">
-      <h2>Agents</h2>
-      <div class="agent-grid">
-        {#each agentList as agent (agent.agent)}
-          <AgentCard {agent} />
-        {/each}
-
-        {#if agentList.length === 0}
-          <p class="empty">No agents discovered yet...</p>
+      <section class="network-section">
+        <h2>Network</h2>
+        <div class="network-container">
+          <NetworkGraph {hooks} {transfers} />
+        </div>
+        {#if transfers.length > 0}
+          <div class="transfer-indicator">
+            <span class="transfer-icon">📦</span>
+            <span>MQ submission in progress...</span>
+          </div>
         {/if}
-      </div>
+      </section>
+
+      <section class="agents-section">
+        <h2>Agents</h2>
+        <div class="agent-grid">
+          {#each agentList as agent (agent.agent)}
+            <AgentCard {agent} />
+          {/each}
+
+          {#if agentList.length === 0}
+            <p class="empty">No agents discovered yet...</p>
+          {/if}
+        </div>
+      </section>
     </div>
 
     <aside class="sidebar">
@@ -226,5 +285,45 @@
     font-style: italic;
     padding: 2rem;
     text-align: center;
+  }
+
+  .network-section {
+    margin-bottom: 2rem;
+  }
+
+  .network-container {
+    height: 350px;
+    margin-bottom: 0.5rem;
+  }
+
+  .transfer-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid #10b981;
+    border-radius: 4px;
+    color: #10b981;
+    font-size: 0.875rem;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .transfer-icon {
+    animation: bounce 1s infinite;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  .agents-section h2 {
+    margin-top: 0;
   }
 </style>
