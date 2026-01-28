@@ -10,7 +10,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createHookPoller } from './gt-poller.js';
+import { createHookPoller, createMultiRigPoller } from './gt-poller.js';
 import { createStateManager } from './state.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +18,8 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const PORT = process.env.PORT || 3000;
-const RIG_PATH = process.env.RIG_PATH || path.resolve(__dirname, '../../..');
+// TOWN_PATH points to the Gas Town root (where all rigs live)
+const TOWN_PATH = process.env.TOWN_PATH || process.env.RIG_PATH || path.resolve(__dirname, '../../..');
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000', 10);
 
 // Initialize Express
@@ -31,9 +32,9 @@ const wss = new WebSocketServer({ server });
 // Initialize state manager
 const stateManager = createStateManager();
 
-// Initialize hook poller
-const hookPoller = createHookPoller(RIG_PATH, (hooks) => {
-  stateManager.updateHooks(hooks);
+// Initialize multi-rig poller (polls all rigs in town)
+const rigPoller = createMultiRigPoller(TOWN_PATH, (rigs) => {
+  stateManager.updateRigs(rigs);
 }, POLL_INTERVAL);
 
 // Subscribe to state changes and broadcast to WebSocket clients
@@ -64,8 +65,8 @@ wss.on('connection', (ws) => {
 
       if (message.type === 'poll:now') {
         // Client requests immediate poll
-        const hooks = await hookPoller.pollNow();
-        stateManager.updateHooks(hooks);
+        const rigs = await rigPoller.pollNow();
+        stateManager.updateRigs(rigs);
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
@@ -83,10 +84,18 @@ app.use(express.json());
 // Serve static files from client build
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
-// API: Get current hook status
+// API: Get current hook status (legacy, returns flattened agents)
 app.get('/api/hooks', (req, res) => {
   res.json({
     hooks: stateManager.getHooks(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get all rigs
+app.get('/api/rigs', (req, res) => {
+  res.json({
+    rigs: stateManager.getRigs(),
     timestamp: new Date().toISOString()
   });
 });
@@ -102,10 +111,10 @@ app.get('/api/state', (req, res) => {
 // API: Trigger immediate poll
 app.post('/api/poll', async (req, res) => {
   try {
-    const hooks = await hookPoller.pollNow();
-    stateManager.updateHooks(hooks);
+    const rigs = await rigPoller.pollNow();
+    stateManager.updateRigs(rigs);
     res.json({
-      hooks: stateManager.getHooks(),
+      rigs: stateManager.getRigs(),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -117,7 +126,7 @@ app.post('/api/poll', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    rigPath: RIG_PATH,
+    townPath: TOWN_PATH,
     pollInterval: POLL_INTERVAL,
     connectedClients: wss.clients.size,
     timestamp: new Date().toISOString()
@@ -132,17 +141,17 @@ app.get('*', (req, res) => {
 // Start server
 server.listen(PORT, () => {
   console.log(`gtviz server running on http://localhost:${PORT}`);
-  console.log(`Monitoring rig: ${RIG_PATH}`);
+  console.log(`Monitoring town: ${TOWN_PATH}`);
   console.log(`Poll interval: ${POLL_INTERVAL}ms`);
 
   // Start polling
-  hookPoller.start();
+  rigPoller.start();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('Shutting down...');
-  hookPoller.stop();
+  rigPoller.stop();
   wss.close();
   server.close();
 });

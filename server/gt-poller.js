@@ -2,7 +2,7 @@
  * GT Command Poller
  *
  * Periodically polls `gt hook` for each agent directory
- * to track hook status across the rig.
+ * to track hook status across all rigs in the town.
  */
 
 import { exec } from 'child_process';
@@ -12,6 +12,44 @@ import path from 'path';
 import fs from 'fs';
 
 const execAsync = promisify(exec);
+
+/**
+ * Discover all rigs in the town directory
+ * @param {string} townPath - Path to the Gas Town directory
+ * @returns {Promise<Array>} List of rig info objects with name and path
+ */
+export async function discoverRigs(townPath) {
+  const rigs = [];
+
+  // Common directories to skip
+  const skipDirs = new Set(['.beads', '.git', 'mayor', 'docs', 'node_modules', '.runtime']);
+
+  try {
+    const entries = fs.readdirSync(townPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || skipDirs.has(entry.name) || entry.name.startsWith('.')) {
+        continue;
+      }
+
+      const rigPath = path.join(townPath, entry.name);
+      // Check if this looks like a rig (has polecats, witness, or refinery)
+      const hasPolecats = fs.existsSync(path.join(rigPath, 'polecats'));
+      const hasWitness = fs.existsSync(path.join(rigPath, 'witness'));
+      const hasRefinery = fs.existsSync(path.join(rigPath, 'refinery'));
+
+      if (hasPolecats || hasWitness || hasRefinery) {
+        rigs.push({
+          name: entry.name,
+          path: rigPath
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error discovering rigs:', error);
+  }
+
+  return rigs;
+}
 
 /**
  * Discover agent directories in a rig
@@ -117,6 +155,41 @@ export async function pollAllAgentHooks(rigPath) {
 }
 
 /**
+ * Poll hook status for all agents across all rigs in town
+ * @param {string} townPath - Path to the Gas Town directory
+ * @returns {Promise<Object>} Map of rig name to { agents: { agentName: hookStatus }, summary: { total, active, idle, error } }
+ */
+export async function pollAllRigs(townPath) {
+  const rigs = await discoverRigs(townPath);
+  const rigStatuses = {};
+
+  await Promise.all(
+    rigs.map(async (rig) => {
+      const agents = await pollAllAgentHooks(rig.path);
+
+      // Calculate summary stats
+      const agentList = Object.values(agents);
+      const summary = {
+        total: agentList.length,
+        active: agentList.filter(a => a.status === 'active').length,
+        hooked: agentList.filter(a => a.status === 'hooked').length,
+        idle: agentList.filter(a => a.status === 'idle').length,
+        error: agentList.filter(a => a.status === 'error').length
+      };
+
+      rigStatuses[rig.name] = {
+        name: rig.name,
+        path: rig.path,
+        agents,
+        summary
+      };
+    })
+  );
+
+  return rigStatuses;
+}
+
+/**
  * Create a hook poller that updates state periodically
  * @param {string} rigPath - Path to the rig directory
  * @param {Function} onUpdate - Callback when hooks are updated
@@ -156,6 +229,50 @@ export function createHookPoller(rigPath, onUpdate, intervalMs = 5000) {
 
     async pollNow() {
       return pollAllAgentHooks(rigPath);
+    }
+  };
+}
+
+/**
+ * Create a multi-rig poller that polls all rigs in town
+ * @param {string} townPath - Path to the Gas Town directory
+ * @param {Function} onUpdate - Callback when rigs are updated
+ * @param {number} intervalMs - Polling interval in milliseconds
+ * @returns {Object} Poller control object
+ */
+export function createMultiRigPoller(townPath, onUpdate, intervalMs = 5000) {
+  let intervalId = null;
+  let isRunning = false;
+
+  const poll = async () => {
+    if (!isRunning) return;
+
+    try {
+      const rigs = await pollAllRigs(townPath);
+      onUpdate(rigs);
+    } catch (error) {
+      console.error('Multi-rig polling error:', error);
+    }
+  };
+
+  return {
+    start() {
+      if (isRunning) return;
+      isRunning = true;
+      poll(); // Initial poll
+      intervalId = setInterval(poll, intervalMs);
+    },
+
+    stop() {
+      isRunning = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    },
+
+    async pollNow() {
+      return pollAllRigs(townPath);
     }
   };
 }

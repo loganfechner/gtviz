@@ -2,7 +2,7 @@
  * State Manager
  *
  * Manages in-memory state for the gtviz server.
- * Tracks agents, hooks, and notifies subscribers of changes.
+ * Tracks rigs, agents, hooks, and notifies subscribers of changes.
  */
 
 /**
@@ -11,8 +11,9 @@
  */
 export function createStateManager() {
   const state = {
-    agents: {},      // Map of agent name -> agent info
-    hooks: {},       // Map of agent name -> hook status
+    agents: {},      // Map of agent name -> agent info (legacy single-rig)
+    hooks: {},       // Map of agent name -> hook status (legacy single-rig)
+    rigs: {},        // Map of rig name -> { name, path, agents, summary }
     lastUpdated: null
   };
 
@@ -82,6 +83,53 @@ export function createStateManager() {
           changes
         });
       }
+    },
+
+    /**
+     * Update rig status for all rigs
+     * @param {Object} rigs - Map of rig name to rig data
+     */
+    updateRigs(rigs) {
+      const changes = [];
+
+      for (const [rigName, rigData] of Object.entries(rigs)) {
+        const previousRig = state.rigs[rigName];
+
+        // Check for agent changes within the rig
+        for (const [agentName, hookStatus] of Object.entries(rigData.agents)) {
+          const previousAgent = previousRig?.agents?.[agentName];
+
+          if (!previousAgent ||
+              previousAgent.beadId !== hookStatus.beadId ||
+              previousAgent.status !== hookStatus.status) {
+            changes.push({
+              rig: rigName,
+              agent: agentName,
+              previous: previousAgent || null,
+              current: hookStatus
+            });
+          }
+        }
+
+        state.rigs[rigName] = rigData;
+      }
+
+      state.lastUpdated = new Date().toISOString();
+
+      // Only notify if there were changes
+      if (changes.length > 0) {
+        notify('rigs:updated', {
+          rigs: state.rigs,
+          changes
+        });
+      }
+    },
+
+    /**
+     * Get all rigs
+     */
+    getRigs() {
+      return { ...state.rigs };
     },
 
     /**
