@@ -19,7 +19,7 @@
     "server": "node server/index.js",
     "client": "cd client && npm run dev",
     "build": "cd client && npm run build",
-    "test": "node --test 'test/**/*.test.js' 'server/**/*.test.js'"
+    "test": "node --test 'test/**/*.test.js' 'server/**/*.test.js' 'mayor/**/*.test.js'"
   },
   "keywords": [
     "gas-town",
@@ -34,7 +34,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "ws": "^8.14.2",
-    "chokidar": "^3.5.3"
+    "chokidar": "^3.5.3",
+    "better-sqlite3": "^11.7.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
