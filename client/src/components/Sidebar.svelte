@@ -9,11 +9,13 @@
   import ErrorPanel from './ErrorPanel.svelte';
   import BeadLifecycleWaterfall from './BeadLifecycleWaterfall.svelte';
   import DependencyGraph from './DependencyGraph.svelte';
+  import CommunicationHeatmap from './CommunicationHeatmap.svelte';
 
   export let beads = [];
   export let hooks = {};
   export let events = [];
   export let errors = [];
+  export let mail = [];
   export let rig = null;
   export let agents = [];
   export let agentHistory = {};
@@ -71,6 +73,9 @@
     <button class:active={activeTab === 'metrics'} on:click={() => activeTab = 'metrics'}>
       Metrics
     </button>
+    <button class:active={activeTab === 'heatmap'} on:click={() => activeTab = 'heatmap'}>
+      Heatmap
+    </button>
     <button class:active={activeTab === 'errors'} class:has-errors={hasActiveErrors} on:click={() => activeTab = 'errors'}>
       Errors
       {#if errorCount > 0}
@@ -98,6 +103,8 @@
       <AgentInsightsPanel {logs} {agentStats} {selectedAgent} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'metrics'}
       <MetricsDashboard {metrics} loading={!hasInitialData} />
+    {:else if activeTab === 'heatmap'}
+      <CommunicationHeatmap {mail} {agents} {rig} loading={!hasInitialData} />
     {:else if activeTab === 'errors'}
       <ErrorPanel {errors} loading={!hasInitialData} />
     {/if}

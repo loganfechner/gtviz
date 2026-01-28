@@ -173,6 +173,7 @@
       hooks={currentHooks}
       events={$events}
       errors={$errors}
+      mail={$state.mail || []}
       rig={selectedRig}
       agents={currentAgents}
       {agentHistory}
