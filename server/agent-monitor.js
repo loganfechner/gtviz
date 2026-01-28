@@ -2,6 +2,7 @@ import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { stat, readdir } from 'fs/promises';
 import { join } from 'path';
+import { COMMAND_TIMEOUT_MS, IDLE_THRESHOLD_MS } from './constants.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -30,7 +31,7 @@ function isValidName(name) {
  */
 async function safeExec(cmd, options = {}) {
   try {
-    const { stdout } = await execAsync(cmd, { timeout: 5000, ...options });
+    const { stdout } = await execAsync(cmd, { timeout: COMMAND_TIMEOUT_MS, ...options });
     return stdout;
   } catch {
     return '';
@@ -42,7 +43,7 @@ async function safeExec(cmd, options = {}) {
  */
 async function safeExecFile(cmd, args, options = {}) {
   try {
-    const { stdout } = await execFileAsync(cmd, args, { timeout: 5000, ...options });
+    const { stdout } = await execFileAsync(cmd, args, { timeout: COMMAND_TIMEOUT_MS, ...options });
     return stdout;
   } catch {
     return '';
@@ -60,7 +61,7 @@ async function safeExecFile(cmd, args, options = {}) {
 export class AgentMonitor {
   constructor() {
     this.gtDir = process.env.GT_DIR || `${process.env.HOME}/gt`;
-    this.idleThresholdMs = 60000; // Consider idle if no activity for 60 seconds
+    this.idleThresholdMs = IDLE_THRESHOLD_MS;
   }
 
   /**
@@ -191,7 +192,7 @@ export class AgentMonitor {
       for (const file of files) {
         if (file.isFile()) {
           const fileStat = await stat(join(mailPath, file.name));
-          if (now - fileStat.mtimeMs < 60000) return true; // 1 minute
+          if (now - fileStat.mtimeMs < IDLE_THRESHOLD_MS) return true;
         }
       }
     } catch {}

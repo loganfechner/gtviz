@@ -6,6 +6,7 @@
  */
 
 import { execFileSync } from 'child_process';
+import { POLL_INTERVAL_MS, COMMAND_TIMEOUT_MS, EXEC_TIMEOUT_MS } from './constants.js';
 
 /**
  * Validate rig/polecat name to prevent injection
@@ -36,7 +37,7 @@ function execGtJson(args) {
   try {
     const result = execFileSync('gt', [...args, '--json'], {
       encoding: 'utf-8',
-      timeout: 10000,
+      timeout: EXEC_TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe']
     });
     return JSON.parse(result.trim());
@@ -53,7 +54,7 @@ export async function listRigs() {
   try {
     const result = execFileSync('gt', ['rig', 'ls'], {
       encoding: 'utf-8',
-      timeout: 5000,
+      timeout: COMMAND_TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe']
     });
     // Parse rig names from output (one per line)
@@ -113,7 +114,7 @@ function getHookStatus(rig, polecat) {
     const agentBeadId = `gt-${rig}-polecat-${polecat}`;
     const result = execFileSync('gt', ['bd', 'show', agentBeadId, '--json'], {
       encoding: 'utf-8',
-      timeout: 5000,
+      timeout: COMMAND_TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe']
     });
     const beads = JSON.parse(result.trim());
@@ -228,7 +229,7 @@ export async function getAllAgentStatusFlat() {
  */
 export class StatusDetector {
   constructor(options = {}) {
-    this.pollInterval = options.pollInterval || 5000;
+    this.pollInterval = options.pollInterval || POLL_INTERVAL_MS;
     this.listeners = new Set();
     this.lastStatus = {};
     this.polling = false;

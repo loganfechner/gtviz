@@ -1,4 +1,10 @@
 import { writable, derived } from 'svelte/store';
+import {
+  INITIAL_RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  RECONNECT_JITTER_MS,
+  STALE_THRESHOLD_MS
+} from './constants.js';
 
 export const state = writable({
   rigs: {},
@@ -20,15 +26,12 @@ export const connectionStatus = writable({
   hasInitialData: false
 });
 
-// Stale data threshold (10 seconds without updates while connected)
-const STALE_THRESHOLD = 10000;
-
 // Derived store for stale data detection
 export const isStale = derived(
   connectionStatus,
   ($status) => {
     if (!$status.connected || !$status.lastUpdateTime) return false;
-    return Date.now() - $status.lastUpdateTime > STALE_THRESHOLD;
+    return Date.now() - $status.lastUpdateTime > STALE_THRESHOLD_MS;
   }
 );
 
@@ -38,14 +41,12 @@ let reconnectAttempt = 0;
 let useFallback = false;
 
 // Exponential backoff configuration
-const INITIAL_DELAY = 1000;      // 1 second
-const MAX_DELAY = 30000;         // 30 seconds max
 const BACKOFF_MULTIPLIER = 2;
 
 function getReconnectDelay() {
-  const delay = Math.min(INITIAL_DELAY * Math.pow(BACKOFF_MULTIPLIER, reconnectAttempt), MAX_DELAY);
+  const delay = Math.min(INITIAL_RECONNECT_DELAY_MS * Math.pow(BACKOFF_MULTIPLIER, reconnectAttempt), MAX_RECONNECT_DELAY_MS);
   // Add jitter to prevent thundering herd
-  return delay + Math.random() * 1000;
+  return delay + Math.random() * RECONNECT_JITTER_MS;
 }
 
 function getWebSocketUrls() {

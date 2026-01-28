@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentMonitor } from './agent-monitor.js';
 import logger from './logger.js';
+import { POLL_INTERVAL_MS, COMMAND_TIMEOUT_MS, LONG_COMMAND_TIMEOUT_MS } from './constants.js';
 
 const execAsync = promisify(exec);
 
@@ -39,7 +40,7 @@ export class GtPoller {
     this.state = state;
     this.metrics = metrics;
     this.interval = null;
-    this.pollIntervalMs = 5000;
+    this.pollIntervalMs = POLL_INTERVAL_MS;
     this.agentMonitor = new AgentMonitor();
     this.lastSuccessfulPoll = {};
     this.failureCount = {};
@@ -84,7 +85,7 @@ export class GtPoller {
   async pollRigs() {
     try {
       const rigs = await withRetry(async () => {
-        const { stdout } = await execAsync('gt rig list --json 2>/dev/null || gt rig list', { timeout: 10000 });
+        const { stdout } = await execAsync('gt rig list --json 2>/dev/null || gt rig list', { timeout: LONG_COMMAND_TIMEOUT_MS });
         return this.parseRigList(stdout);
       }, 'pollRigs');
 
@@ -260,13 +261,13 @@ export class GtPoller {
           try {
             const { stdout } = await execAsync(`bd list --json 2>/dev/null`, {
               cwd: `${gtDir}/${rig}`,
-              timeout: 10000
+              timeout: LONG_COMMAND_TIMEOUT_MS
             });
             return this.parseBeads(stdout);
           } catch {
             const { stdout } = await execAsync(`bd list 2>/dev/null || echo ""`, {
               cwd: `${gtDir}/${rig}`,
-              timeout: 10000
+              timeout: LONG_COMMAND_TIMEOUT_MS
             });
             return this.parseBeadsText(stdout);
           }
@@ -437,7 +438,7 @@ export class GtPoller {
     try {
       const { stdout } = await execAsync(`bd show ${beadId} --json 2>/dev/null || bd show ${beadId}`, {
         cwd,
-        timeout: 5000
+        timeout: COMMAND_TIMEOUT_MS
       });
       return this.parseBeadDetails(stdout, beadId);
     } catch {
@@ -581,7 +582,7 @@ export class GtPoller {
                 `gt hook --json 2>/dev/null || gt hook`,
                 {
                   cwd: `${gtDir}/${rig}/${agent}`,
-                  timeout: 5000,
+                  timeout: COMMAND_TIMEOUT_MS,
                   env: { ...process.env, GT_ROLE: agent }
                 }
               );
@@ -604,7 +605,7 @@ export class GtPoller {
                   `gt hook --json 2>/dev/null || gt hook`,
                   {
                     cwd: `${gtDir}/${rig}/polecats/${polecat}`,
-                    timeout: 5000
+                    timeout: COMMAND_TIMEOUT_MS
                   }
                 );
                 const hookData = this.parseHookOutput(stdout, polecat);
