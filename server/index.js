@@ -9,6 +9,8 @@ import { GtPoller } from './gt-poller.js';
 import { createMetricsCollector } from './metrics.js';
 import { LogsWatcher } from './logs-watcher.js';
 import { createAnomalyDetector } from './anomaly-detector.js';
+import { AlertingEngine } from './alerting-engine.js';
+import { RulesStore } from './rules-store.js';
 import logger from './logger.js';
 import { METRICS_HISTORY_SIZE, METRICS_BROADCAST_MS } from './constants.js';
 
@@ -28,6 +30,8 @@ const anomalyDetector = createAnomalyDetector({
 const gtPoller = new GtPoller(state, metrics);
 const fileWatcher = new FileWatcher(state);
 const logsWatcher = new LogsWatcher(state);
+const rulesStore = new RulesStore();
+const alertingEngine = new AlertingEngine(state, rulesStore);
 
 // Track intervals for cleanup
 let metricsInterval = null;
@@ -158,6 +162,14 @@ state.on('error', (error) => {
   });
 });
 
+// Broadcast alerts from alerting engine to all clients
+alertingEngine.on('alert', (alert) => {
+  const message = JSON.stringify({ type: 'alert', alert });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(message);
+  });
+});
+
 wss.on('connection', (ws) => {
   logger.info('websocket', 'Client connected');
   metrics.recordWsConnection();
@@ -271,7 +283,7 @@ app.get('/api/events/export', (req, res) => {
   }
 });
 
-// Alert management API
+// Alert management API (anomaly detector)
 app.get('/api/alerts', (req, res) => {
   res.json(anomalyDetector.getAlerts());
 });
@@ -312,6 +324,84 @@ app.put('/api/alerts/thresholds', express.json(), (req, res) => {
   res.json(anomalyDetector.getThresholds());
 });
 
+// Alerting Rules API
+app.use(express.json());
+
+// Get all rules
+app.get('/api/rules', (req, res) => {
+  res.json(alertingEngine.getRules());
+});
+
+// Get single rule
+app.get('/api/rules/:id', (req, res) => {
+  const rule = alertingEngine.getRule(req.params.id);
+  if (!rule) {
+    return res.status(404).json({ error: 'Rule not found' });
+  }
+  res.json(rule);
+});
+
+// Create new rule
+app.post('/api/rules', async (req, res) => {
+  try {
+    const rule = await alertingEngine.createRule(req.body);
+    res.status(201).json(rule);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update rule
+app.put('/api/rules/:id', async (req, res) => {
+  try {
+    const rule = await alertingEngine.updateRule(req.params.id, req.body);
+    res.json(rule);
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// Delete rule
+app.delete('/api/rules/:id', async (req, res) => {
+  try {
+    await alertingEngine.deleteRule(req.params.id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// Toggle rule enabled/disabled
+app.post('/api/rules/:id/toggle', async (req, res) => {
+  try {
+    const rule = await alertingEngine.toggleRule(req.params.id);
+    res.json(rule);
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// Get alert history from alerting engine
+app.get('/api/alerts/history', (req, res) => {
+  res.json(alertingEngine.getAlertHistory());
+});
+
+// Get rule statistics
+app.get('/api/rules/:id/stats', (req, res) => {
+  const stats = alertingEngine.getRuleStats(req.params.id);
+  res.json(stats);
+});
+
+// Test a rule against current state
+app.post('/api/rules/test', (req, res) => {
+  try {
+    const results = alertingEngine.testRule(req.body);
+    res.json(results);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = join(__dirname, '..', 'client', 'dist');
@@ -336,7 +426,7 @@ server.on('error', (err) => {
   throw err;
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   // Restore state from disk if available
   const restored = state.loadState();
   if (restored) {
@@ -344,6 +434,7 @@ server.listen(PORT, () => {
   }
 
   logger.info('server', 'gtviz server started', { port: PORT, url: `http://localhost:${PORT}` });
+  await alertingEngine.initialize();
   gtPoller.start();
   fileWatcher.start();
   logsWatcher.start();

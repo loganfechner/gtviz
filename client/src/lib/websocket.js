@@ -24,6 +24,9 @@ export const errors = writable([]);
 // Alerts store for tracking active alerts
 export const alerts = writable([]);
 
+// Rules store for alerting configuration
+export const rules = writable([]);
+
 // Connection status store for UI display
 export const connectionStatus = writable({
   connected: false,
@@ -164,6 +167,10 @@ export function connectWebSocket(onStatusChange) {
             ...s,
             alerts: [msg.alert, ...(s.alerts || [])].slice(0, 100)
           }));
+          connectionStatus.update(s => ({
+            ...s,
+            lastUpdateTime: now
+          }));
         } else if (msg.type === 'alertUpdated') {
           // Alert was acknowledged or resolved
           alerts.update(a => a.map(alert =>
@@ -241,4 +248,34 @@ export function disconnect() {
     lastUpdateTime: null,
     hasInitialData: false
   });
+}
+
+// Fetch alert rules from API
+export async function fetchRules() {
+  try {
+    const response = await fetch('/api/rules');
+    if (response.ok) {
+      const data = await response.json();
+      rules.set(data);
+      return data;
+    }
+  } catch (err) {
+    console.error('Failed to fetch rules:', err);
+  }
+  return [];
+}
+
+// Fetch alert history from API
+export async function fetchAlerts() {
+  try {
+    const response = await fetch('/api/alerts');
+    if (response.ok) {
+      const data = await response.json();
+      alerts.set(data);
+      return data;
+    }
+  } catch (err) {
+    console.error('Failed to fetch alerts:', err);
+  }
+  return [];
 }
