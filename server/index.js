@@ -153,6 +153,25 @@ app.get('/api/health', (req, res) => {
     rigPath: RIG_PATH,
     pollInterval: POLL_INTERVAL,
     connectedClients: wss.clients.size,
+    cache: hookPoller.getCacheStats(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Get cache statistics
+app.get('/api/cache', (req, res) => {
+  res.json({
+    cache: hookPoller.getCacheStats(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API: Invalidate cache
+app.post('/api/cache/invalidate', (req, res) => {
+  hookPoller.invalidateCache();
+  res.json({
+    status: 'invalidated',
+    cache: hookPoller.getCacheStats(),
     timestamp: new Date().toISOString()
   });
 });
